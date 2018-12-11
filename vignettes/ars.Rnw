@@ -1,0 +1,906 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage{natbib}
+\usepackage{geometry}
+\geometry{tmargin=1in,bmargin=1in,lmargin=1in,rmargin=1in}
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\usepackage{a4wide}
+\usepackage[colorlinks,linkcolor=blue,citecolor=red]{hyperref}
+\usepackage{float}
+\usepackage{parskip}
+\usepackage{amsmath}
+\usepackage{url}
+
+\title{Introduction to Statistical Computing (STAT 243)
+\\ Final Project \\[4mm]
+\textbf{R Package:Adaptive Rejection Sampler}}
+
+
+\author{Dandan Ru, Sargam Jain, Baoyue Liang}
+
+\date{December $11^{th}$ 2018}
+
+\begin{document}
+
+\maketitle
+
+\section{GitHub repository}
+The package is available on GitHub under the username
+\textbf{sargamjain13}. The direct URL to the package is:
+\url{https://github.com/sargam_jain/adaptive_rejection_sampler}.
+
+\section{Introduction}
+The R package: adaptive rejection sampler, \texttt{ars}, is an
+implementation of adaptive rejection sampling proposed by
+\href{https://www.jstor.org/stable/2347565?seq=1#metadata_info_tab_contents}{Gilks et. al
+(1992)}. The package conducts rejection sampling for univariate
+log-concave probability density functions. The sampling is adaptive as
+within the sampling process, the rejection envelope and squeezing
+function are updated to converge to the true density function.
+
+The package consists of a primary wrapper function, \texttt{ars()} and
+a couple of auxilliary functions used to generate the objects used in
+the entire adaptive rejection sampling procedure. The wrapper function
+\texttt{ars()} require the users to provide the following arguments:
+\begin{itemize}
+\item \texttt{M}: Number of points to sample
+\item \texttt{lb}: Lower bound for domain of the density function
+\item \texttt{ub}: Upper bound for domain of the density function
+\item \texttt{f}: Univariate log-concave density function
+\item \texttt{mod\_val}: Highest probability density point
+\item \texttt{width}: Size of the steps taken around mod\_val to
+initialize sampling. 
+\end{itemize}
+
+Following is a simple illustration of how the adaptive rejection
+sampling is conducted using the \texttt{ars()} package:
+<<compile-r-intro, size = "small", eval=FALSE>>=
+library(ars)
+
+## Std. Normal function 
+dnor <- function(x){
+  return((1/(sqrt(2*pi)))*exp(-(x^2)/2))
+}
+
+adapt_sample <- ars(M = 10000, lb = -5, ub = 5, f = dnor)
+@
+
+The following section describes the approach used to create the
+adaptive rejection sampler and explains the role of auxilliary
+functions used in the analysis.  
+
+\section{Approach}
+We divided the adaptive rejective sampling procedure into four 
+stages. Following are the four stages along with the auxilliary
+functions that execute each of these stages.  
+\begin{itemize}
+\item \textbf{Stage I:} Initialization stage (\texttt{initialize\_sample()})
+\item \textbf{Stage II:} Sampling stage (\texttt{create\_samples()})
+\item \textbf{Stage III:} Squeezing and rejection test (\texttt{sr\_test()})
+\item \textbf{Stage IV:} Updation stage (\texttt{update\_z()} and \texttt{update\_hfamily()})
+\end{itemize}
+
+Before initiating any of these stages, we first check for concavity,
+continuity, and differentiablity of the given density function, and
+then the process starts with the initialization process. Once the
+algorithm is through Stage I, Stage II to IV are repated until M
+sampling points have been generated. The following sub-sections
+discuss each of these stages in detail:
+
+\subsection{Stage I: Initialization stage}
+We fist check if the user has provided the upper and lower bounds for
+$x$ vector. On basis of whether the bounds have been provided, four
+possible situations arise, and we initialize the $x$ vector
+accordingly:
+\begin{itemize}
+\item \textbf{Both \texttt{lb} and \texttt{ub} are provided}: We
+initialize the first two values of $x$ vector as uniform random
+samples between the two bounds.
+\item \textbf{Only \texttt{lb} provided}: We define a new upper bound
+for $x$, \texttt{uub}. The new bound is defined using the mod\_val. It
+is initiated as equal to mod\_val and increased iteratively using the
+step width until the derivative of log-density function at
+\texttt{uub} becomes greater than or equal to zero. We, then,
+initialize the first two values of $x$ vector as uniform random
+samples between the \texttt{lb} and \texttt{uub}. 
+\item \textbf{Only \texttt{ub} provided}: We define a new lower bound
+for $x$, \texttt{llb}. The new bound is defined using the mod\_val. It
+is initiated as equal to mod\_val and reduced iteratively using the
+step width until the derivative of log-density function at
+\texttt{llb} becomes less than or equal to zero. We, then,
+initialize the first two values of $x$ vector as uniform random
+samples between the \texttt{llb} and \texttt{ub}.
+\item \textbf{Both \texttt{lb} and \texttt{ub} are NOT provided}: We
+define both, a new lower bound, \texttt{llb}, and a new upper bound
+\texttt{uub} for $x$. The new bounds are defined using the
+mod\_val. While the \texttt{llb} is initiated as mod\_val - width,
+\texttt{uub} is initiated as mod\_val + width. Iteratively,
+\texttt{llb} is reduced using the step width until the derivative of
+log-density function at \texttt{llb} becomes less than or equal to
+zero. Similarly, \texttt{uub} is increased using the step width until
+the derivative of log-density function at \texttt{uub} becomes greater
+than or equal to zero. We, then, initialize the first two values of
+$x$ vector as uniform random samples between the \texttt{llb} and
+\texttt{uub}.
+\end{itemize}
+Once, we have the initial values of the $x$ vector, we define the
+log-density and derivative of log-density for the initial values of
+the $x$ vector using the function, \texttt{initialize\_hfamily()}. We
+refer to these values as the H-family matrix. Using the H-family
+matrix, we then, initialize the first three values of the $z$ vector
+using \texttt{initialize\_z()}, i.e. the points where tangents to $x$
+intersect.
+
+\subsection{Stage II: Sampling stage}
+The first step of the sampling stage is to compute the CDF of the
+\textit{upper hull} of the envelope function in each interval
+i.e. in $[z_i, z_(i+1)]$. We initiate a \texttt{for} loop to compute
+the CDF and create logic vectors to find $z$ values
+that lie in a particular interval. If inside the interval, we cumulate
+till the example point, otherwise, if outside the interval, we
+cumulate across the entire interval. These steps of sampling stage are
+conducted using the function, \texttt{calculate\_scdf()}. The output of
+the function is the total CDF, $c$ and cumulated CDF for every
+interval. Next, we sample a $M^{1/3}+2$ uniform random samples, and
+using these sampled CDF convert the uniform sample to $x$, generating
+$M^{1/3}+2-1$ samples.
+
+\subsection{Stage III: Squeezing and rejection test}
+We conduct the squeezing and rejection test using the function,
+\texttt{sr\_test()}. To form the squeezing and rejection tests, we
+first compute the u(x) and l(x), using the \texttt{l()} and
+\texttt{u()} functions. We then sample a standard uniform random sample, $w$,
+and perform the squeezing test. We select the samples that passed the
+squeezing test. We then perform the rejection test and select the
+first sample that did not pass the squeezing test. The function
+returns a list of accepted samples, the first sample that did not pass
+the squeezing test, and number of samples accepted.
+
+\subsection{Stage IV: Updation stage}
+Using the newly created samples, we now update the H-family using the
+function, \texttt{update\_hfamily()}, i.e. we add a new line in the
+H-family matrix for the first sample that did not pass the squeezing
+test. For the updated H-family matrix, we update the $z$ vector.
+
+
+\section{Testing framework}
+\subsection{Testing primary wrapper function}
+% \begin{description}
+% \item Tests for different 
+% \subsection{Stage II: Sampling stage}
+% \subsection{Stage III: Squeezing test}
+% \subsection{Stage IV: Updation stage}
+
+\section{Examples: Common log-concave distributions}
+
+\section{Contribution}
+
+
+The goal of this problem is to think carefully about the design and
+interpretation of simulation studies, which we'll talk about in Unit
+10. In particular, we'll work with Lo et al. (2001), an article in
+Biometrika, which is a leading statistics journal. Read the first
+three pages and Section 3 of the article. You don't need to understand
+their algorithm for testing the null hypothesis [i.e., you can treat
+it as some black box algorithm] or the theoretical development, though
+it may help to skim through some of the material on the algorithm for
+context. Briefly (a few sentences for each of the four questions
+below) answer the following questions.
+
+\begin{description}
+
+\item [(a)] What are the goals of their simulation study and what are
+the metrics that they consider in assessing their method?
+
+\textbf{Ans.}
+
+The simulation studies were conducted to investigate the finite sample
+properties of the test, testing the null hypothesis that the
+$k_o$-component normal mixture and the $k_1$-component normal mixture
+are equally close to the true underlying distribution against the
+alternative hypothesis that the $k_1$-component mixture is better than
+the $k_o$-component mixture.
+
+The metrics considered in assessing the method used are:
+\begin{itemize}
+\item Maximum likelihood estimates of parameters throughout were obtained by the
+EM algorithm from Dempster et al., 1977 with 100 sets of random
+starting values for the parameters.
+\item The p-values were computed with both the approximation error,
+which is defined as the error that arises from using quadrature
+formulae, and the truncation error less than $10^{-7}$.
+\end{itemize}
+
+\item [(b)] What choices did the authors have to make in designing
+their simulation study? What are the key aspects of the data
+generating mechanism that likely affect the statistical power of the test?
+Are there data-generating scenarios that the authors did not consider
+that would be useful to consider?
+
+\textbf{Ans.}
+
+The choices made in designing the simulation study include:
+\begin{itemize}
+\item For a mixture of two normal distributions, the standard
+deviations of the two normal distributions are assumed to be same.
+\item The authors decided the sample sizes to range between 50, 75,
+\ldots 1000.
+\item The choice of test statistic used in the analysis.
+\item The proportion in which the component normal distributions are
+used to create a mixture.
+\end{itemize}
+
+Some aspects of DGM that affect the statistical power of the test are:
+\begin{itemize}
+\item Number of samples generated.
+\item Value of mixing proportions used to create mixture of normal
+distribution for 2 and 3 component mixture of distribution.
+\item Sample sizes
+\item Distance measure defined on basis of samples used.
+\end{itemize}
+
+Data generating scenarios that authors did not consider include:
+\begin{itemize}
+\item A normal mixture with unequal variances of component
+distributions.
+\item Different measures for distance between the two
+components. 
+\end{itemize}
+
+\item [(c)] Interpret their tables on power (Tables 2 and 4) - do the
+results make sense in terms of how the power varies as a function of
+the data generating mechanism?
+
+\textbf{Ans.}
+
+Table 2 discusses the case for null hypothesis that a random sample
+has been drawn from a single normal distribution vs an alternative
+being that sample is drawn of mixture of two normal
+distributions). The empirical powers of the adjusted and unadjusted
+tests are evaluated at $\alpha = 0.01$ and 0.05. The power is seen to
+be very low for $n < 200$ when the two components are not well
+separated, thus a sample size of 100 or more is required to have
+reasonable power when the two components are well separated. There is
+no strong evidence that the power depends on the mixing proportion,
+although the power for $\pi = 0.5$ and $\pi = 0.7$ is somewhat higher
+than that for $\pi = 0.9$. The power of the unadjusted test is
+inflated, because the approximation of the nominal levels of 0.01 and
+0.05 to the actual levels of the unadjusted test is not accurate. As a
+consequence, the unadjusted test tends to reject the null hypothesis
+more often than does the adjusted test.
+
+Table 3 discusses the case for null hypothesis that a random sample
+has been drawn from a mixture of two normal distributions vs
+alternative being that sample is drawn of mixture of three normal
+distributions. The results show that the rate of convergence of
+adjusted test statistic toward the asymptotic distribution depends on
+the spacing between the components and the mixing
+proportion. Regardless of the mixing proportion, the distribution of
+2LR* (test statistic) converges rather well for $D = 1$ and 2. When $D
+= 3$, the approximation is not very accurate but is acceptable for
+most sample sizes.
+
+Table 4 gives the observed rejection rates of the null hypothesis at
+$\alpha = 0.01$ and 0.05 for the first set of mixing weights. The
+results indicate that the factors with most influence on power are the
+spacings $D_1$ and $D_2$. The adjusted test exhibits low power for
+sample sizes less than 200 when $D_1 \leq 4$ and $D_2 \leq 2$, or $D1
+\leq 2$ and $D \leq 4$.
+
+\item [(d)] Do their tables do a good job of presenting the simulation
+results and do you have any alternative suggestions for how to do this?
+
+\textbf{Ans.}
+
+In general, graphs are a better way of showing the results of a
+simulation exercise, however, given the number of dimensions of
+parameters the authors have been working on, a graphical
+representation would have been difficult in a static manner. Thus, I
+believe that the authors have done a decent job.
+
+\end{description}
+
+\section{Question 2}
+
+Using the Stack Overflow database
+(\url{http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db}),
+write SQL code that will determine which users have asked
+Spark-related questions (tags that have "apache-spark" as part of the
+tag – you'll need to use the SQL wildcard character, \%) but not
+Python-related questions. Those of you with more experience with SQL
+might do this in a single query, but it's perfectly fine to create one
+or more views and then use those views to get the result as a
+subsequent query. Report how many unique such users there. The Stack
+Overflow SQLite database is ~ 650 MB on disk, which should be
+manageable on most of your laptops, but if you run into problems, you
+can use an SCF machine or Savio.
+
+\textbf{Ans.} The following R-chunk uses \textit{RQLite} to run 
+SQL queries and find the number of users using Spark-related questions
+but not Python related questions. The total number of such users are:
+\textbf{4647}.
+
+% <<compile-r-Q2, size = "small", eval=TRUE>>=
+% ########################
+% ## Libraries required ##
+% ########################
+% library(RSQLite)
+
+% ################
+% ## SQL driver ##
+% ################
+% # Define driver
+% driver <- dbDriver("SQLite")
+% # Define directory
+% dir <- 'QUES2/DATA/' 
+% dbFilename <- 'stackoverflow-2016.db'
+% # Connect to driver
+% db <- dbConnect(driver, dbname = file.path(dir, dbFilename))
+
+% ###############
+% ## SQL Query ##
+% ###############
+% dbGetQuery(db,
+%     "SELECT COUNT(DISTINCT Q.ownerid) FROM
+% questions Q JOIN questions_tags T ON Q.questionid = T.questionid
+% WHERE T.tag LIKE '%apache-spark%' AND
+% Q.ownerid NOT IN 
+% (SELECT DISTINCT A.ownerid FROM
+% (SELECT Q.ownerid, T.tag FROM
+% questions Q JOIN questions_tags T ON Q.questionid = T.questionid
+% WHERE T.tag LIKE '%apache-spark%') A JOIN 
+% (SELECT Q.ownerid, T.tag FROM questions Q
+% JOIN questions_tags T ON Q.questionid = T.questionid
+% WHERE T.tag LIKE '%python%') B ON A.ownerid = B.ownerid)")
+% @
+
+
+% \section{Question 3}
+
+% With the full Wikipedia traffic data for October-December 2008
+% (available on Savio in
+% \url{/global/scratch/paciorek/wikistats\_full/dated}), figure out a question
+% to investigate with the data and use Spark to process the data to
+% answer the question. You should use Spark to process the dataset, but
+% you can then use R or Python as you wish to do the subsequent analysis
+% (which might be simply a graphical presentation or might involve
+% fitting a statistical model). For example, given the time period
+% available, you could consider a U.S. politics-related question, a
+% question related to holidays since many holidays occur in the fall, a
+% question related to seasonality since the data cover the period where
+% the northern hemisphere enters winter and the southern hemisphere
+% enters summer, or a question related to daily/weekly patterns. Given
+% the information on language, you may be able to get at some sort of
+% pattern related to culture or religion. You can also extend the Obama
+% analysis, but it should be more than a trivial extension.
+
+% \textbf{Ans.}
+
+% The following pyspark and bash code chunks are run on SAVIO to extract the
+% wikipedia hits for the webpages used in the analysis. The webpages for
+% which the hits have been extracted are:
+% \begin{itemize}
+% \item \textbf{Freddie Mac} (\url{https://en.wikipedia.org/wiki/Freddie_Mac})
+% \item \textbf{Fannie Mae} (\url{https://en.wikipedia.org/wiki/Fannie_Mae})
+% \item \textbf{Federal Reserve} (\url{https://en.wikipedia.org/wiki/Federal_Reserve})
+% \item \textbf{Mortgage-backed securities} (\url{https://en.wikipedia.org/wiki/Mortgage-backed_security})
+% \item \textbf{Financial crisis of 2007-08} (\url{https://en.wikipedia.org/wiki/Financial_crisis_of_2007%E2%80%932008})
+% \end{itemize}
+
+% The following pyspark code chunk below is run in interactive mode to access the hits
+% statistics for the above mentioned webpages. To run the pyspark code
+% the interactive mode is first started on.
+
+% The bash commands used to turn on the interactive mode for pyspark
+% are:
+
+
+% <<compile-bash-Q3, engine='bash', eval = FALSE>>=
+% # Login to hpc cluster on SAVIO using:
+% ssh -Y sargam_jain@hpc.brc.berkeley.edu
+% tmux new -s spark
+% srun -A ic_stat243 -p savio2 --nodes=4 -t 3:00:00 --pty bash
+% module load java spark/2.1.0 python/3.5
+% source /global/home/groups/allhands/bin/spark_helper.sh
+
+% # Login to viz cluster on SAVIO to open otterbrowser using:
+% ssh -Y sargam_jain@viz.brc.berkeley.edu
+% vncserver
+
+% # Back to hpc.cluster to open PYSPARK:
+% echo $SPARK_URL
+% pyspark --master $SPARK_URL --conf
+% e"spark.executorEnv.PYTHONHASHSEED=321" --executor-memory 60G
+% @
+
+
+% Following is the pyspark script used to extract the data for the above
+% mentioned webpages. The phrase \texttt{site\_of\_interest} is
+% replaced by the following phrases:
+% \begin{itemize}
+% \item \texttt{Financial\_crisis\_of\_2007-2008}
+% \item \texttt{Freddie\_Mac}
+% \item \texttt{Fannie\_Mae}
+% \item \texttt{Federal\_reserve}
+% \item \texttt{Mortgage-backed\_securities}
+% \end{itemize}
+
+
+% <<compile-python-Q3, engine='python', size = "small", eval=FALSE>>=
+% ###################
+% ## Packages used ##
+% ###################
+% import re
+% from operator import add
+
+% ##############################
+% # Read wikipedia parent data #
+% ##############################
+% dir = '/global/scratch/paciorek/wikistats_full'
+% lines = sc.textFile(dir + '/' + 'dated') 
+
+% ###############################
+% # Filtering sites of interest #
+% ###############################
+% def find(line, regex = "site_of_interest", language = None):
+%     vals = line.split(' ')
+%     if len(vals) < 6:
+%         return(False)
+%     tmp = re.search(regex, vals[3])
+%     if tmp is None or (language != None and vals[2] != language):
+%         return(False)
+%     else:
+%         return(True)
+
+% object_of_interest = lines.filter(find)  # use this for demo in section
+
+% ###################################################################
+% ## Map-reduce step to sum hits across date-time-language triplet ##
+% ###################################################################   
+% def stratify(line):
+%     # create key-value pairs where:
+%     #   key = date-time-language
+%     #   value = number of website hits
+%     vals = line.split(' ')
+%     return(vals[0] + '-' + vals[1] + '-' + vals[2], int(vals[4]))
+
+% counts = object_of_interest.map(stratify).reduceByKey(add)
+
+% ################################
+% ## Map step to prepare output ##
+% ################################
+% def transform(vals):
+%     # split key info back into separate fields
+%     key = vals[0].split('-')
+%     return(",".join((key[0], key[1], key[2], str(vals[1]))))
+
+% # Output to file is done using one partition because one file per partition is written out
+% outputDir = dir + '/' + 'dir-of-interest'
+% counts.map(transform).repartition(1).saveAsTextFile(outputDir)
+% @
+
+% The analysis on the Wikistats data requires following packages:
+
+
+% <<compile-r-Q3a, size = "small", eval=TRUE, message=FALSE>>=
+% ##################
+% # Libraries used #
+% ##################
+% library(data.table)
+% library(readr)
+% library(xts)
+% library(dynlm)
+% @
+
+
+% The reduced data for each of the webpages is of the format as
+% demonstrated in the r-code chunk below:
+
+% <<compile-r-Q3b, size = "small", eval=TRUE, message=FALSE>>=
+% #####################
+% # Directory address #
+% #####################
+% parent_dir = "QUES3/data/"
+% sub_dir = list.files(parent_dir)
+
+% ################################
+% # Function to read parent data #
+% ################################
+% read_data <- function(repo){
+%     cat("Reading data for:", repo, "...\n")
+%     ans = read_delim(file = paste0(parent_dir, repo, "/", "part-00000"),
+%        		     delim = ",",
+% 		     col_names = FALSE)
+%     ans <- data.frame(ans)
+%     colnames(ans) <- c("date", "time", "lang", "hits")
+%     ans$date <- as.Date(as.character(ans$date), "%Y%m%d")
+%     ans$new_lang <- substr(ans$lang, 1, 2)
+%     ans$date_time <- paste(ans$date, ans$time)
+%     ans$time <- as.POSIXct(ans$time, format = "%H%M%S")
+%     ans$date_time <- as.POSIXct(ans$date_time, format = "%Y-%m-%d %H%M%OS")
+%     ans <- ans[order(ans$date), ]
+%     return(ans)
+% }
+
+% fannie_mae = read_data(repo = sub_dir[2])
+% fed_reserve = read_data(repo = sub_dir[3])
+% financial_crisis = read_data(repo = sub_dir[4])
+% freddie_mac = read_data(repo = sub_dir[5])
+% mortgage = read_data(repo = sub_dir[6])
+
+% head(financial_crisis)
+% @
+
+% Now, the Wikipedia webpage on \textit{Financial Crisis 2007-2008} was
+% created immediately prior to our sample period (October-December,
+% 2008) on September 17, 2008. The number of hits on the web page
+% increased overtime, especially during the months of October and early
+% November. The following r-chunk shows the number of hits at daily
+% frequency and marks the major events that took place during our sample
+% period:
+
+% <<compile-r-Q3supp, size = "small", eval=TRUE, message=FALSE, fig.width=8, fig.height=5>>=
+% ########################################
+% ## Function to sum hits over each day ##
+% ########################################
+% aggregate_data <- function(mdata, lang = "all"){
+%     unique_dates <- sort(unique(mdata$date))
+%     per_date <- do.call(rbind, lapply(unique_dates, function(x){
+%         tmp <- mdata[mdata$date == x, ]
+%         ans <- data.frame("date" = x,
+%                           "hits" = sum(tmp$hits),
+%                           "lang" = lang)
+%         return(ans)
+%     }))
+%     return(per_date)
+% }
+
+% agg_fannie_mae = aggregate_data(mdata = fannie_mae)
+% agg_fed_reserve = aggregate_data(mdata = fed_reserve)
+% agg_financial_crisis = aggregate_data(mdata = financial_crisis)
+% agg_freddie_mac = aggregate_data(mdata = freddie_mac)
+% agg_mortgage = aggregate_data(mdata = mortgage)
+
+% plot(agg_financial_crisis$date, agg_financial_crisis$hits,
+% lty = 1, lwd = 2.5, col = "red", las = 1, type = "l",
+% xlab = "", ylab = "Number of hits",
+% main = "Hits on 'Financial Crisis 2007-08'")
+% points(agg_financial_crisis$date, agg_financial_crisis$hits,
+% col = "black", pch = 19)
+% abline(h = pretty(agg_financial_crisis$hits), lty = 3, lwd = 1, col = "darkgray")
+% abline(v = pretty(agg_financial_crisis$date), lty = 3, lwd = 1, col = "darkgray")
+% abline(v = as.Date("2008-10-03"), lwd = 2.5, lty = 1, col = "orange")
+% mtext("TARP revised", side = 3, line = 0.5, at = as.Date("2008-10-03"))
+% @
+
+% The major action taken by the state during the start of the sample period in the analysis
+% was when Congress passed a revised version of TARP and President
+% Bush signed it on October 3, 2008. 
+
+% The following are the \textbf{questions} explored using the wikistats
+% data:
+% \begin{itemize}
+% \item At the time of the financial crisis, the page, Financial crisis
+% of 2007-08 was a recently created page on Wikipedia on Sept 17th,
+% 2008. The time-series model in the analysis evaluates whether people
+% consistently checked the page for more information on new developments
+% around the time of the crisis, i.e. was Wikipedia updated with
+% real-time developments about the crisis attracting users to come back
+% and checkout the recent developments.
+
+% \item Did people have a bottom-up or top-down approach while searching
+% about what was happening at the time of the crisis?  i.e. were they
+% first understanding the FIs/instruments involved in the crisis and
+% then looking for the recent updates or were they first updating
+% themselves about the recent actions taken to curb the crisis and then
+% digging deeper to understand the FIs/instruments involved in the
+% crisis.
+% \end{itemize}
+
+% \textbf{Before we answer these questions, we try to understand the
+% data:}
+
+% First, we \textbf{analyze the correlation of the hits on the webpages of
+% interest}. The following R-code chunk evaluates the correlation of hits
+% on the webpage, \textit{Financial crisis of 2007-08} with hits on the
+% webpages: \textit{Freddie Mac}, \textit{Freddie Mae}, \textit{Federal
+% Reserve}, and \textit{Mortgage-backed securities}.
+
+% The correlation numbers are mostly greater than 0.5 for all the
+% pairs.
+
+% <<compile-r-Q3c, size = "small", eval=TRUE, message=FALSE>>=
+% ## Correlation between financial crisis and FIs/financial instrument webpages
+% cor(agg_financial_crisis$hits, agg_freddie_mac$hits)
+
+% cor(agg_financial_crisis$hits, agg_fannie_mae$hits)
+
+% cor(agg_financial_crisis$hits, agg_mortgage$hits)
+
+% cor(agg_financial_crisis$hits, agg_fed_reserve$hits)
+% @
+
+% Second, we \textbf{look at the underlying distribution of the hits on webpages
+% of interest} during the three months sample of crisis period. A Q–Q
+% plot is used to compare the underlying distributions of the hits
+% across web pages in analysis. We use Q-Q plots to compare the
+% underlying distribution of sample of hits as it is a more powerful
+% approach to do this than comparing histograms. The Q-Q plots that the
+% sample of hits on wikipedia for web pages of interest have similar
+% underlying distribution.
+
+% <<compile-r-Q3d, size = "small", eval=TRUE, message=FALSE, fig.width=6, fig.height=6>>=
+% ################################
+% ## Function to make Q-Q plots ##
+% ################################
+% make_qqplots <- function(mdata1, mdata2, xlabel, ylabel){
+%     a_1 <- log(mdata1$hits)
+%     a_2 <- log(mdata2$hits)
+%     qqplot(x = a_1, y = a_2, 
+%            xlab = xlabel, ylab = ylabel, cex.lab = 1,
+%            pch = 19, col = "darkblue", las = 1)
+%     abline(h = pretty(a_2), lwd = 1, lty = 3, col = "darkgray")
+%     abline(v = pretty(a_1), lwd = 1, lty = 3, col = "darkgray")
+% }
+% par(mfrow = c(2,2))
+% par(mar = c(4, 5, 3, 1))
+% make_qqplots(mdata1 = agg_mortgage,
+%              mdata2 = agg_financial_crisis,
+%              xlabel = "Hits on Mortgage-backed securities",
+%              ylabel = "Hits on Financial Crisis")
+% make_qqplots(mdata1 = agg_freddie_mac,
+%              mdata2 = agg_financial_crisis,
+%              xlabel = "Hits on Freddie Mac",
+%              ylabel = "Hits on Financial Crisis")
+% make_qqplots(mdata1 = agg_fannie_mae,
+%              mdata2 = agg_financial_crisis,
+%              xlabel = "Hits on Fannie Mae",
+%              ylabel = "Hits on Financial Crisis")
+% make_qqplots(mdata1 = agg_fed_reserve,
+%              mdata2 = agg_financial_crisis,
+%              xlabel = "Hits on Fed Reserve",
+%              ylabel = "Hits on Financial Crisis")
+
+% @
+
+% \textbf{We now, start exploring the above mentioned questions:}
+
+% \textbf{First question}: Did Wikipedia users consistently check
+% the page for more information on new developments during the sample
+% period of three months during the crisis?
+
+% The regression model in the following R-chunk analyzes how likely was
+% it that a wikipedia user would return back to the page to checkout
+% more information about the existing crisis. Thus, we analyze the
+% dependence over lagged values of hits on the page. We explore the
+% relationship of the hits on financial crsis with the lagged values
+% over 1-day, 2-days, 7-days, and 8-days. The time series model in the
+% R-code chunk below shows a strong relationship of $(t-7)$ days lagged
+% hits on the page with the hits on day $t$, indicating that wikipedia
+% users went back to the Financial Crisis page iteratively with a lag of
+% about a week to check for more information.
+
+% <<compile-r-Q3e, size = "small", eval=TRUE, message=FALSE>>=
+% ####################################################################
+% ## Function to sum hits over each hour across different languages ##
+% ####################################################################
+% aggregate_data_hr <- function(mdata){
+%     unique_dates <- sort(unique(mdata$date))
+%     per_date <- do.call(rbind, lapply(unique_dates, function(x){
+%         tmp <- mdata[mdata$date == x, ]
+%         unique_time <- unique(substr(tmp$time, 12, 13))
+%         per_hour <- do.call(rbind, lapply(unique_time, function(y){
+%             tmp1 <- tmp[substr(tmp$time, 12, 13) == y, ]
+%             ans <- data.frame("date" = tmp1$date[1],
+%                               "date_time" = tmp1$date_time[1],
+%                               "hits" = sum(tmp1$hits),
+%                               "hour" = as.numeric(y))
+%             return(ans)
+%         }))
+%         per_hour <- per_hour[order(per_hour$hour), ]
+%         return(per_hour)
+%     }))
+%     return(per_date)
+% }
+
+% hour_fannie_mae = aggregate_data_hr(mdata = fannie_mae)
+% hour_fed_reserve = aggregate_data_hr(mdata = fed_reserve)
+% hour_financial_crisis = aggregate_data_hr(mdata = financial_crisis)
+% hour_freddie_mac = aggregate_data_hr(mdata = freddie_mac)
+% hour_mortgage = aggregate_data_hr(mdata = mortgage)
+
+% ########################################################
+% ## Logarithmic values used in time series regression  ##
+% ########################################################
+%                                         # Hourly hits
+% fmae <- xts(log10(hour_fannie_mae$hits), order.by = hour_fannie_mae$date_time)
+% fedres <- xts(log10(hour_fed_reserve$hits), order.by = hour_fed_reserve$date_time)
+% fcrisis <- xts(log10(hour_financial_crisis$hits), order.by = hour_financial_crisis$date_time)
+% fmac <- xts(log10(hour_freddie_mac$hits), order.by = hour_freddie_mac$date_time)
+% mort <- xts(log10(hour_mortgage$hits), order.by = hour_mortgage$date_time)
+
+% #########################
+% ## Regression analysis ##
+% #########################
+% dfm0 <- dynlm(fcrisis ~ L(fcrisis, c(seq(25, 49, 24), seq(169, 217, 24))))
+% summary(dfm0)
+% @
+
+% \textbf{Second question}: What was the direction of Wikipedia search
+% that the users adopted? Did they try to understand the crisis by
+% learning about the financial institutions and instruments involved
+% followed by the new developments coming up with every passing day? Or
+% was it the other way round.
+
+% The R-code chunk below first evaluates the relationship of hits on
+% Financial crisis web page with the lagged hits on web pages of
+% financial institutions and financial instruments. The results for the
+% model, \texttt{dfm1} shows that with an exception of the lagged hits
+% on web page for Federal reserve, the hits on Financial Crisis have a
+% positive and a significant relationship with lagged hits on all other
+% web pages.
+
+% Second, the model \texttt{dfm2} evaluates the other-way round search
+% approach of the Wikipedia users. Thus we evaluate the relationship of
+% hits on web pages of financial instruments and institutions with the
+% lagged hits on the Financial Crisis web page. The model, \texttt{dfm2}
+% shows insignificant relationship between hits on the page of
+% mortgage-backed securities and lagged hits on the Financial Crisis
+% webpage. Thus, the two models explain the search approach of Wikipedia
+% users: the Wikipedia users first, tried to understand the underlying
+% financial instruments and institutions before digging deeper into new
+% developments taking place during the crisis period on the Financial
+% Crisis page listing these developments.    
+
+
+% <<compile-r-Q3f, size = "small", eval=TRUE, message=FALSE>>=
+% ####################
+% ## One-way search ##
+% ####################
+% dfm1 <- dynlm(fcrisis ~ L(fmae, 3) + L(fedres, 2) + L(fmac, 1) + L(mort, 1))
+% summary(dfm1)
+
+% ##########################
+% ## The other-way search ##
+% ##########################
+% dfm2 <- dynlm(mort ~ L(fmac, 1) + L(fmae, 2) + L(fcrisis, c(2:4)))
+% summary(dfm2)
+% @
+
+% \section{Question 4}
+
+% This question asks you to complete the exercise begun in section on
+% October 16. Consider the full Wikipedia traffic data as in problem 3,
+% but use the data in \url{/global/scratch/paciorek/wikistats\_full/dated\_for\_R}.
+% It's the same data as in problem 3, but the partitions are half as big
+% so that one can fit 24 partitions in memory on a single Savio node.
+
+% \begin{description}
+
+% \item[(a)] Using either \textit{foreach} or \textit{parSapply} (or
+% \textit{parLapply}) on a single Savio node in the savio2 partition
+% (i.e., use "-p savio2" when submitting your job), write code that, in
+% parallel, reads in the space-delimited files and filters to only the
+% rows that refer to pages where "Barack\_Obama" appears.  Collect all
+% the results across the 960 files into a single data frame. (Note that
+% the R packages you'll need should be available in R if you use "module
+% load r r-packages", so you should not have to install them.) You can
+% do this either in an interactive session using srun or a batch job
+% using SBATCH. And if you use srun, you can run R itself either
+% interactively or as a background job. If it's taking a while and you
+% want to run the code on, say, a quarter of the files and then assume
+% the time scales accordingly, that's fine.
+
+% Hints:
+% \begin{enumerate}
+% \item \texttt{readr::read\_delim()} should be quite fast if employed
+% effectively
+% \item there are lines with fewer than 6 fields, but
+% \texttt{read\_delim()} should still work and simply issue a warning
+% \item there are lines that have quotes that should be treated as part
+% of the text of the fields and not as separators. Also, as usual, you
+% should test your code on a small subset interactively to make sure it
+% works before unleashing it on the full dataset.
+% \end{enumerate}
+% Alternatively, if you want to explore parallelizing bash shell code,
+% you should be able to do this problem without using R at all.
+
+% \textbf{Ans.}
+
+% The following R-script is used to filter out webpages where
+% \texttt{Barack\_Obama} appears. The parallel computing is done in $R$
+% using the \textit{parLapply} function in R. The following R script is
+% run as a BATCH job in SAVIO using the batch script provided below the
+% R-chunk:
+
+% \textbf{In total there are 430,160 observations (webpages) with the
+% phrase \texttt{Barack\_Obama}.  }
+% <<compile-r-Q4a, size = "small", eval=FALSE, message=FALSE>>=
+% ###################
+% # Input variables #
+% ###################
+% data_url <- "/global/scratch/paciorek/wikistats_full/dated_for_R/"
+% all_files <- list.files(data_url)
+
+% ##################
+% # Libraries used #
+% ##################
+% library(parallel)
+% library(data.table)
+% library(doParallel)
+% num_cores <- detectCores() - 4
+
+% cl <- makeCluster(num_cores)
+% clusterExport(cl, c('data_url', 'all_files'))
+% clusterEvalQ(cl, library(readr))	
+
+% extract_records_with_BO <- function(x){
+%     cat("Working on file", x, "...\n")
+%     ans = read_delim(file = paste0(data_url, x),
+%        		     delim = " ",
+% 		     col_names = FALSE)
+%     ans <- data.frame(ans)
+%     colnames(ans) <- c("date", "time", "lang", "web_page", "no_of_hits", "page_size")
+%     tmp = ans[grep("Barack_Obama", ans$web_page), ]
+%     return(tmp)
+% }
+% system.time(records_BO <- parLapply(cl, all_files, extract_records_with_BO))
+% stopCluster(cl)
+% @
+
+% The bash script used to run the BATCH job on SAVIO is as follows:
+
+% <<compile-bash-Q4a, engine='bash', eval = FALSE>>=
+% # Login to hpc cluster on SAVIO using:
+% ssh -Y sargam_jain@hpc.brc.berkeley.edu
+% #!/bin/bash
+% # Job name:
+% #SBATCH --job-name=ps6_ques4_sj
+% #
+% # Account:
+% #SBATCH --account=ic_stat243
+% #
+% # Partition:
+% #SBATCH --partition=savio2
+% #
+% # Number of tasks needed for use case:
+% #SBATCH --nodes=1
+% #
+% # Processors per task:
+% #SBATCH --cpus-per-task=1
+% #
+% # Wall clock limit (2 hours here):
+% #SBATCH --time=2:00:00
+% #
+% ## Command(s) to run:
+% module load r r-packages
+% R CMD BATCH ps6_ques4.R ps6_ques4.Rout
+% @
+
+
+% \item [(b)] When I run the Spark code provided with Unit 7, it takes ~15
+% minutes using 96 cores to create the filtered dataset that just has the Obama-related webpage traffic
+% using Spark. Assuming that you can achieve perfect scalability (i.e., that if you ran your code
+% in part (a) on 4 times as many cores, it would go 4 times as fast), compare the effectiveness of
+% using parallelized R versus using PySpark in terms of how long it
+% takes to do the filtering. (Note that Unit 8 shows how one could
+% parallelize R across multiple nodes, but I won’t ask you to actually
+% do that here.)
+
+% \textbf{Ans.}
+
+% It takes 15 minutes using 96 cores in to create filtered data set that
+% has only Obama-related webpage traffic using Spark.
+
+% In R, I used 20 cores and that took approximately, 45 minutes in completing the
+% task. Assumming perfect scalability, 96 cores on R parallel computing
+% would have taken 14.01 minutes. Thus, the performance of PySpark and
+% parallel computing (over a single node) remain comparable at 15
+% minutes and 14.1 minutes, respectiveley. Moreover, this comparison
+% between the two is dependent on load on the server at the time of
+% their respective processings. 
+% \end{description}
+
+\end{document}
+
+
