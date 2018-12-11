@@ -1,23 +1,21 @@
 Package: ars
-Version: 1.0
-Date: 2018-12-10
-Type: Package
 Title: Adaptive Rejection Sampler
+Version: 0.1
 Authors@R: c(
-           person("Baoyue", "Liang", role = "aut",
-                            email = "byliang@berkeley.edu"),
-           person("Sargam", "Jain", role = "aut",
-                            email = "sargam_jain@berkeley.edu"),
-           person("Dandan", "Ru", role = "aut",
-                           email = "rdd1221@berkeley.edu")
-           )
-Maintainer: Sargam Jain <sargam_jain@berkeley.edu>
-Depends: R (>= 3.0), zoo, xts, boot, testthat, sandwich
-Description: An R package for adaptive rejection sampling from any
-univariate log-concave probability density function.
-VignetteBuilder: knitr
-Suggests: knitr
+	   person("Baoyue", "Liang", role = "aut",
+	   email = "byliang@berkeley.edu"),
+	   person("Sargam", "Jain", role = c("aut", "cre"),
+	   email = "sargam_jain@berkeley.edu"),
+	   person("Dandan", "Ru", role = "aut",
+	   email = "rdd1221@berkeley.edu")
+	   )
+Maintainer: Sargam Jain <sargam_jain@berkeley.edu>  
+Description: An R package for adaptive rejection sampling for log-concave density function.
+Depends: R (>= 3.1.0), roxygen2, testthat, assertthat, knitr, truncdist
+Siggests: testthat
 License: GPL-2
 URL: https://github.com/sargamjain13/ars
 BugReports: https://github.com/sargamjain13/ars/issues/new
 LazyLoad: yes
+LazyData: true
+
