@@ -27,7 +27,7 @@
 \section{GitHub repository}
 The package is available on GitHub under the username
 \textbf{sargamjain13}. The direct URL to the package is:
-\url{https://github.com/sargam_jain/adaptive_rejection_sampler}.
+\url{https://github.com/sargamjain13/ars}.
 
 \section{Introduction}
 The R package: adaptive rejection sampler, \texttt{ars}, is an
