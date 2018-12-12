@@ -54,8 +54,8 @@ ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
     epsilon = 1e-6
 
     ## Condition for continuity
-    if(sum(round(compute_log(check_vector + epsilon), digits = 6) !=
-           round(compute_log(check_vector + epsilon), digits = 6)) != 0){
+    if(sum(round(compute_log(check_vector + epsilon, f), digits = 6) !=
+           round(compute_log(check_vector + epsilon, f), digits = 6)) != 0){
         stop("Density function is either dis-continuous, non-differentiable, or convex.",
     .call = FALSE)
     }
@@ -64,43 +64,30 @@ ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
     mode <- round(optimize(f, interval = c(lb, ub))$minimum, 2)
     if(sum(round(compute_deriv(mode,
                                lb = lb,
-                               ub = ub),
+                               ub = ub, f = f),
                  digits = 4) != round(compute_deriv(x = (mode - 1e-8),
                                                     lb = lb,
-                                                    ub = ub),
+                                                    ub = ub, f = f),
                                       digits=4)) != 0){
-        stop("Log density function is not differentiable over the domain.",
+        stop("Log density function is not differentiable over the domain",
              .call = FALSE)
     }
 
-    ## Condition for differentiability
-    if(sum(round(compute_deriv(x = check_vector,
-                               lb = lb,
-                               ub = ub),
-                 digits=4) != round(compute_deriv(x = (check_vector +
-                                                       1e-16),
-                                                  lb = lb,
-                                                  ub = ub),
-                                    digits=4)) != 0){
-        stop("Density function is either dis-continuous, non-differentiable, or convex.",
-             .call = FALSE)
-    }
-    
     ## Condition for concavity
-    if(sum(round(diff(compute_deriv(x = check_vector, lb = lb, ub = ub)),digits=8) > 1e-4) !=0){
-        stop("Density function is either dis-continuous, non-differentiable, or convex.",
+    if(sum(round(diff(compute_deriv(x = check_vector, lb = lb, ub = ub, f = f)),digits=8) > 1e-4) !=0){
+        stop("Log density function is not concave over the domain.",
              .call = FALSE)
     }
     
     ## Special case for Uniform
-    if(sum(compute_deriv(x = check_vector,lb = lb,ub = ub) != 0) == 0){
+    if(sum(compute_deriv(x = check_vector,lb = lb,ub = ub, f = f) != 0) == 0){
         gsample = runif(M, min = lb, max = ub)
         hist(gsample)
         return(gsample)
     }
 
     ## StageI: Initialize sample
-    initialized_sample <- initialize_sample(M, lb, ub, width = 0.5, mod_val = 0)
+    initialized_sample <- initialize_sample(M, lb, ub, width = 0.5, mod_val = 0, f = f)
     hfamily <- initialized_sample$hfamily
     zvalues <- initialized_sample$zvalues
     
@@ -115,13 +102,13 @@ ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
         ## each time we need the squeezing test to accept M^(2/3) samples
 
         ## Stage III: Squeezing and Rejection
-        sr_test_x <- sr_test(samples, hfamily, zvalues)
+        sr_test_x <- sr_test(samples, hfamily, zvalues, f = f)
         sample_count = sample_count + sr_test_x$count_accept
         sample_bag = c(sample_bag, sr_test_x$x_accept)
 
         ## Stage IV: Updation
         if (is.na(sr_test_x$x_r) != TRUE){
-            hfamily <- update_hfamily(hfamily,x_r = sr_test_x$x_r)
+            hfamily <- update_hfamily(hfamily,x_r = sr_test_x$x_r, lb = lb, ub = ub, f = f)
             zvalues <- update_z(hfamily,lb,ub)
         }
         

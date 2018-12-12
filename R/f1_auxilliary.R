@@ -4,11 +4,10 @@
 ##' @param func: Density function 
 ##' @return A vector with values of log density function
 ##' @author Baoyue Liang, Sargam Jain, Dandan Ru
-compute_log <- function(x, func = f){
-    log_val <- log(func(x))
+compute_log <- function(x, f){
+    log_val <- log(f(x))
     return(log_val)
 }
-
 
 ##' The function to compute derivative of the density function.
 ##' @title compute_deriv() 
@@ -24,15 +23,15 @@ compute_deriv <- function(x, func = compute_log, lb, ub, f){
     deriv <- rep(NA, length(x))
     if(sum(x == lb) != 0){
         x_lb <- x[x == lb]
-        deriv[x == lb] <- (func(x_lb + epsilon) - func(x_lb)) / epsilon 
+        deriv[x == lb] <- (func(x_lb + epsilon, f) - func(x_lb, f)) / epsilon 
     }
     if(sum(x == ub) != 0){
         x_ub <- x[x == ub]
-        deriv[x == ub] <- (func(x_ub) - func(x_ub - epsilon)) / epsilon 
+        deriv[x == ub] <- (func(x_ub, f) - func(x_ub - epsilon, f)) / epsilon 
     }
     if(sum(is.na(deriv)) != 0){
-        deriv[is.na(deriv)] <- (func(x[is.na(deriv)]+epsilon)
-            - func(x[is.na(deriv)]))/ epsilon
+        deriv[is.na(deriv)] <- (func(x[is.na(deriv)]+epsilon, f)
+            - func(x[is.na(deriv)], f))/ epsilon
     }
     if (sum(is.na(deriv))!=0){
         stop("Please narrow the boundary, or provide a continous density.",
@@ -53,21 +52,21 @@ compute_deriv <- function(x, func = compute_log, lb, ub, f){
 ##' @param x_initial: Initial values for the x vector 
 ##' @return A matrix with H-family for initial two values of the x-vector 
 ##' @author Baoyue Liang, Sargam Jain, Dandan Ru
-initialize_hfamily <- function(M, lb, ub, h, hprime, x_initial){
+initialize_hfamily <- function(M, lb, ub, h, hprime, x_initial, f){
   
   ## Initialize  matrix for h family: the columns of matrix are
   ## x, h(x), h'(x)
   ## Filling in the initial values in matrix
     hfamily <- rbind(c(x_initial[1],
-                       h(x_initial[1]),
+                       h(x_initial[1], f),
                        hprime(x = x_initial[1],
                               lb = lb,
-                              ub = ub)),
+                              ub = ub, f = f)),
                      c(x_initial[2],
-                       h(x_initial[2]),
+                       h(x_initial[2], f),
                        hprime(x = x_initial[2],
                               lb = lb,
-                              ub = ub)))
+                              ub = ub, f = f)))
     return(hfamily)
 }
 
@@ -116,7 +115,7 @@ initialize_z <- function(M, lb, ub, hfamily){
 ##' @author Baoyue Liang, Sargam Jain, Dandan Ru
 initialize_sample <- function(M, lb, ub, width = 0.5, mod_val = 0,
                               h = compute_log,
-                              hprime = compute_deriv){
+                              hprime = compute_deriv, f = f){
 
     ## Initializing counter index
     count = 0
@@ -124,7 +123,7 @@ initialize_sample <- function(M, lb, ub, width = 0.5, mod_val = 0,
     ## When both the initial parameter values are initialized by the user
     if(lb != -Inf && ub != Inf){
         x_initial <- sort(runif(2, lb, ub))
-        hfamily <- initialize_hfamily(M, lb, ub, h, hprime, x_initial)
+        hfamily <- initialize_hfamily(M, lb, ub, h, hprime, x_initial, f = f)
         zvalues <- initialize_z(M, lb, ub, hfamily)
     }
 
@@ -137,14 +136,14 @@ initialize_sample <- function(M, lb, ub, width = 0.5, mod_val = 0,
         ## Defining the lower initial value
         llb <- mod_val
         ## Check if h'(x) exists for the newly defined lower bound
-        hprime_check <- hprime(x = llb, func = h, lb = lb, ub = ub)
+        hprime_check <- hprime(x = llb, func = h, lb = lb, ub = ub, f = f)
         while(-Inf < hprime_check && hprime_check <= 0 && count <= 100){
             llb <- llb - width
-            hprime_check <- compute_deriv(x = llb, func = h, lb = lb, ub = ub)
+            hprime_check <- compute_deriv(x = llb, func = h, lb = lb, ub = ub, f = f)
             count = count + 1
         }
         x_initial <- sort(c(llb, runif(1, llb, ub)))
-        hfamily <- initialize_hfamily(M, llb, ub, h, hprime,x_initial)
+        hfamily <- initialize_hfamily(M, llb, ub, h, hprime,x_initial, f = f)
         zvalues <- initialize_z(M, lb, ub, hfamily)
     }
 
@@ -156,14 +155,14 @@ initialize_sample <- function(M, lb, ub, width = 0.5, mod_val = 0,
         ## Defining the upper initial value
         uub <- mod_val
         ## Check if h'(x) exists for the newly defined upper bound
-        hprime_check <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+        hprime_check <- compute_deriv(x = uub, func = h, lb = lb, ub = ub, f = f)
         while(0 <= hprime_check && hprime_check < Inf && count <= 100){
             uub <- uub + width
-            hprime_check <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+            hprime_check <- compute_deriv(x = uub, func = h, lb = lb, ub = ub, f = f)
             count = count + 1
         }
         x_initial <- sort(c(runif(1, lb, uub),uub))
-        hfamily <- initialize_hfamily(M, lb, uub, h, hprime,x_initial)
+        hfamily <- initialize_hfamily(M, lb, uub, h, hprime,x_initial, f = f)
         zvalues <- initialize_z(M, lb, ub, hfamily)
     }
 
@@ -172,20 +171,20 @@ initialize_sample <- function(M, lb, ub, width = 0.5, mod_val = 0,
         llb <- mod_val - width
         uub <- mod_val + width
         ## Check if h'(x) exists for the newly defined bounds
-        hprime_check1 <- compute_deriv(x = llb, func = h, lb = lb, ub = ub)
-        hprime_check2 <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+        hprime_check1 <- compute_deriv(x = llb, func = h, lb = lb, ub = ub, f = f)
+        hprime_check2 <- compute_deriv(x = uub, func = h, lb = lb, ub = ub, f = f)
         while(-Inf < hprime_check1 && hprime_check1 <= 0 && count <= 100){
             llb <- llb - width
-            hprime_check1 <- compute_deriv(x = llb, func = h, lb = lb, ub = ub)
+            hprime_check1 <- compute_deriv(x = llb, func = h, lb = lb, ub = ub, f = f)
             count = count + 1
         }
         while(0 <= hprime_check2 && hprime_check2 < Inf && count <= 100){
             uub <- uub + width
-            hprime_check2 <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+            hprime_check2 <- compute_deriv(x = uub, func = h, lb = lb, ub = ub, f = f)
             count = count + 1
         }
         x_initial <- c(llb,uub)
-        hfamily <- initialize_hfamily(M, llb, uub, h, hprime,x_initial)
+        hfamily <- initialize_hfamily(M, llb, uub, h, hprime,x_initial, f = f)
         zvalues <- initialize_z(M, lb, ub, hfamily)
 
         if(count >= 100) {
@@ -328,7 +327,7 @@ l <- function(x_sample, hfamily){
 ##' @return A list with samples accpeted, first sample that did not
 ##'     pass the squeezing test, and counter for number of samples accepted.
 ##' @author Baoyue Liang, Sargam Jain, Dandan Ru
-sr_test <- function(x_sample, hfamily, zvalues, h = compute_log){
+sr_test <- function(x_sample, hfamily, zvalues, h = compute_log, f){
   
     w = runif(length(x_sample))
     count_accept = 0
@@ -343,7 +342,7 @@ sr_test <- function(x_sample, hfamily, zvalues, h = compute_log){
         ## perform rejection test and select the first sample that did not passed the squeezing test
         x_r = x_reject_s[1]
         
-        if(exp(h(x_reject_s[1]) - u(x_reject_s[1],hfamily,zvalues)) >= w[x_sample==x_r]){
+        if(exp(h(x_reject_s[1], f) - u(x_reject_s[1],hfamily,zvalues)) >= w[x_sample==x_r]){
             count_accept = count_accept + 1
             x_accept = c(x_accept,x_r)
         }
@@ -362,9 +361,9 @@ sr_test <- function(x_sample, hfamily, zvalues, h = compute_log){
 ##' @param hprime: Function to compute derivative of log-density function 
 ##' @return A matrix with the updated H-Family
 ##' @author Baoyue Liang, Sargam Jain, Dandan Ru
-update_hfamily <- function(hfamily, x_r, h = compute_log, hprime = compute_deriv){
+update_hfamily <- function(hfamily, x_r, lb, h = compute_log, hprime = compute_deriv, ub, f){
   
-    newline = cbind(x_r, h(x_r), hprime(x_r, lb = lb, ub = ub))
+    newline = cbind(x_r, h(x_r, f), hprime(x_r, lb = lb, ub = ub, f = f))
     hfamily = rbind(hfamily, newline)
     hfamily = hfamily[order(hfamily[ , 1]), ]
     return(hfamily)
