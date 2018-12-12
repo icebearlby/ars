@@ -19,7 +19,13 @@ ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
     if(class(f) != "function"){
         stop("Please provide f as a function", call. = FALSE)
     }
-
+    #Check if lb and ub are both numeric values
+    if(class(lb)!="numeric"){
+    stop('please provide a numeric value for lb', call. = FALSE)
+    }
+    if(class(ub)!="numeric"){
+    stop('please provide a numeric value for ub', call. = FALSE)
+    }
     ## Check if user provide lb<ub
     if(lb >= ub){
         stop("Please provide lb and ub such that lb < ub", call. = FALSE)
