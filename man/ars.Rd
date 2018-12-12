@@ -52,7 +52,9 @@ ars(M,
   }
 }
 
-\details{ This function is used to conduct adaptive rejection sampling acting
+\details{
+
+  This function is used to conduct adaptive rejection sampling acting
   as a wrapper over all the stages of the algorithm provided in the \pkg{ars}
   package. It provides an interface to select and control the process of
   adaptive rejection sampling. It includes choice of the concave density
@@ -97,7 +99,7 @@ ars(M,
     \item{Updation: See \code{\link{update_hfamily}} and
       \code{\link{update_z}} for more details.}
   }
-  
+}	
   
 \author{Baoyue Liang, Sargam Jain, Dandan Ru}
 
@@ -115,16 +117,16 @@ ars(M,
 
 \examples{ 
 ## Adaptive rejection sampling for standard normal
-# es <- ars(M = 10000,
-#           lb = -1,
-#           ub = 1,
-#           f = dnor)
+es <- ars(M = 10000,
+          lb = -1,
+          ub = 1,
+          f = dnor)
 
 ## Adaptive rejection sampling for logistic
-# es <- ars(M = 10000,
-#           lb = -1,
-#           ub = 1,
-#           f = dlogit)
+es <- ars(M = 10000,
+          lb = -1,
+          ub = 1,
+          f = dlogit)
 }
 
 \keyword{ars}

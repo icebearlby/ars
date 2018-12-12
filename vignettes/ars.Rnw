@@ -27,7 +27,7 @@
 \section{GitHub repository}
 The package is available on GitHub under the username
 \textbf{sargamjain13}. The direct URL to the package is:
-\url{https://github.com/sargamjain13/ars}.
+\url{https://github.com/sargam_jain/adaptive_rejection_sampler}.
 
 \section{Introduction}
 The R package: adaptive rejection sampler, \texttt{ars}, is an
@@ -54,6 +54,7 @@ initialize sampling.
 
 Following is a simple illustration of how the adaptive rejection
 sampling is conducted using the \texttt{ars()} package:
+
 <<compile-r-intro, size = "small", eval=FALSE>>=
 library(ars)
 
@@ -134,16 +135,18 @@ intersect.
 \subsection{Stage II: Sampling stage}
 The first step of the sampling stage is to compute the CDF of the
 \textit{upper hull} of the envelope function in each interval
-i.e. in $[z_i, z_(i+1)]$. We initiate a \texttt{for} loop to compute
+i.e. in $[z_i, z_{(i+1)}]$. We initiate a \texttt{for} loop to compute
 the CDF and create logic vectors to find $z$ values
 that lie in a particular interval. If inside the interval, we cumulate
 till the example point, otherwise, if outside the interval, we
 cumulate across the entire interval. These steps of sampling stage are
 conducted using the function, \texttt{calculate\_scdf()}. The output of
 the function is the total CDF, $c$ and cumulated CDF for every
-interval. Next, we sample a $M^{1/3}+2$ uniform random samples, and
+interval. Next, we sample a $M^{2/3}+10$ uniform random samples, and
 using these sampled CDF convert the uniform sample to $x$, generating
-$M^{1/3}+2-1$ samples.
+$M^{2/3}+10$ samples. On average the number of samples generated
+should be $M^{2/3}$. The exact value of $M1$ id the authors'
+discretion and this can be altered by the user. 
 
 \subsection{Stage III: Squeezing and rejection test}
 We conduct the squeezing and rejection test using the function,
@@ -164,742 +167,483 @@ test. For the updated H-family matrix, we update the $z$ vector.
 
 
 \section{Testing framework}
+Our testing framework is categorized into tests for primary wrapper
+function and tests for auxilliary functions used within the primary
+function. For each of these categories, we test if the functions
+handle the valid and invalid arguments well. We also check for the
+what output objects to expect from the functions.
 \subsection{Testing primary wrapper function}
-% \begin{description}
-% \item Tests for different 
-% \subsection{Stage II: Sampling stage}
-% \subsection{Stage III: Squeezing test}
-% \subsection{Stage IV: Updation stage}
+\begin{description}
+ \item [Tests for common log-concave functions:] We test if our
+ package works for the common log-concave density functions. These
+ include: 
+ \begin{itemize}
+ \item Standard Normal Distribution
+ \item Uniform Distribution
+ \item Logistic Distribution
+ \item Gamma Distribution
+ \item Beta Distribution
+ \item Exponential Distribution
+ \end{itemize}
+ \item [Tests for invalid inputs for arguments:] We check for the
+ following invalid inputs provided to the primary function:
+ \begin{itemize}
+ \item If a convex density function is provided as argument
+ \item If a non-differentiable function is provided as argument
+ \item If a non-continuous function is provided as argument
+ \item If the density function is not of the class 'function'
+ \item If the lower bound of the domain is greater than the upper bound
+ \end{itemize}
+ \end{description}
+\subsection{Testing for auxilliary functions}
+We test the following major auxilliary functions for what to expect as
+output with valid and invalid arguments:
+\begin{itemize}
+\item \texttt{compute\_deriv()}
+\item \texttt{initialize\_sample()}
+\item \texttt{initialize\_z()}
+\item \texttt{create\_sample()}
+\item \texttt{calculate\_scdf()}
+\item \texttt{update\_z()}
+\end{itemize}
 
 \section{Examples: Common log-concave distributions}
+This section showcases the working of the \texttt{ars} package for
+common log-concave distributions. The black bold line in the graphs
+marks the true density function and the blue line marks the density of
+observations sampled using adaptive rejection technique. 
+
+\includegraphics[scale = 0.75]{figures/common_density_plots}
+
 
 \section{Contribution}
 
-
-The goal of this problem is to think carefully about the design and
-interpretation of simulation studies, which we'll talk about in Unit
-10. In particular, we'll work with Lo et al. (2001), an article in
-Biometrika, which is a leading statistics journal. Read the first
-three pages and Section 3 of the article. You don't need to understand
-their algorithm for testing the null hypothesis [i.e., you can treat
-it as some black box algorithm] or the theoretical development, though
-it may help to skim through some of the material on the algorithm for
-context. Briefly (a few sentences for each of the four questions
-below) answer the following questions.
-
-\begin{description}
-
-\item [(a)] What are the goals of their simulation study and what are
-the metrics that they consider in assessing their method?
-
-\textbf{Ans.}
-
-The simulation studies were conducted to investigate the finite sample
-properties of the test, testing the null hypothesis that the
-$k_o$-component normal mixture and the $k_1$-component normal mixture
-are equally close to the true underlying distribution against the
-alternative hypothesis that the $k_1$-component mixture is better than
-the $k_o$-component mixture.
-
-The metrics considered in assessing the method used are:
+The contributions of each of the co-authors for the package are listed
+below:
 \begin{itemize}
-\item Maximum likelihood estimates of parameters throughout were obtained by the
-EM algorithm from Dempster et al., 1977 with 100 sets of random
-starting values for the parameters.
-\item The p-values were computed with both the approximation error,
-which is defined as the error that arises from using quadrature
-formulae, and the truncation error less than $10^{-7}$.
+\item Initialization stage: Sargam Jain and Dandan Ru
+\item Sampling stage: Baoyue Liang
+\item Squeezing and Rejection stage: Baoyue Liang and Dandan Ru
+\item Updation stage: Baoyue Liang
+\item Testing Framework: Dandan Ru
+\item Package Building: Sargam Jain
+\item Report writing: Sargam Jain
 \end{itemize}
+All the co-authors worked together on de-bugging and testing package.
+
+\section{Appendix}
+
+This section presents the R-codes implemented for the primary wrapper
+function and the auxillary functions used in the package.
+
+\subsection{Primary wrapper function: \texttt{ars()}}
+
+<<compile-r-append1, size = "small", eval=FALSE>>=
+ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
+
+    ## Check the class of f: Function
+    if(class(f) != "function"){
+        stop("Please provide f as a function", call. = FALSE)
+    }
+
+    ## Check if lb and ub are both numeric values
+    if(class(lb)!="numeric"){
+    stop('please provide a numeric value for lb', call. = FALSE)
+    }
+    if(class(ub)!="numeric"){
+    stop('please provide a numeric value for ub', call. = FALSE)
+    }
+
+    ## Check if user provide lb<ub
+    if(lb >= ub){
+        stop("Please provide lb and ub such that lb < ub", call. = FALSE)
+    }
+    
+    ## Generate samples for sanity check: concavity, differentiability, continuity
+    if (lb != -Inf && ub != Inf){
+        check_vector <- runif(100, lb, ub)
+    }
+    if (lb == -Inf && ub != Inf){
+        neg_epsilon = -(1e+4)
+        check_vector <- runif(100, neg_epsilon, ub)
+    }
+    if (lb != -Inf && ub == Inf){
+        pos_epsilon = 1e+4
+        check_vector <- runif(100, lb, pos_epsilon)
+    }
+    if (lb == -Inf && ub == Inf){
+        pos_epsilon = 1e+4
+        neg_epsilon = -(1e+4)
+        check_vector <- runif(100, neg_epsilon, pos_epsilon)
+    }
+    check_vector <- sort(check_vector)
+    epsilon = 1e-6
+
+    ## Condition for continuity
+    if(sum(round(compute_log(check_vector + epsilon, f), digits = 6) !=
+           round(compute_log(check_vector + epsilon, f), digits = 6)) != 0){
+        stop("Density function is either dis-continuous, non-differentiable, or convex.",
+    .call = FALSE)
+    }
+
+    ## Condition for differentiability
+    mode <- round(optimize(f, interval = c(lb, ub))$minimum, 2)
+    if(sum(round(compute_deriv(mode,
+                               lb = lb,
+                               ub = ub, f = f),
+                 digits = 4) != round(compute_deriv(x = (mode - 1e-8),
+                                                    lb = lb,
+                                                    ub = ub, f = f),
+                                      digits=4)) != 0){
+        stop("Log density function is not differentiable over the domain",
+             .call = FALSE)
+    }
+
+    ## Condition for concavity
+    if(sum(round(diff(compute_deriv(x = check_vector,
+    				    lb = lb,
+				    ub = ub,
+				    f = f)), digits=8) > 1e-4) !=0){
+        stop("Log density function is not concave over the domain.",
+             .call = FALSE)
+    }
+    
+    ## Special case for Uniform
+    if(sum(compute_deriv(x = check_vector,
+    			 lb = lb,
+			 ub = ub,
+			 f = f) != 0) == 0){
+        gsample = runif(M, min = lb, max = ub)
+        hist(gsample)
+        return(gsample)
+    }
+
+    ## StageI: Initialize sample
+    initialized_sample <- initialize_sample(M, lb, ub, width = 0.5, mod_val = 0, f = f)
+    hfamily <- initialized_sample$hfamily
+    zvalues <- initialized_sample$zvalues
+    
+    sample_count = 0
+    sample_bag = 0
+    
+    while(sample_count <= M){
+
+        ## Stage II: Sampling
+        samples <- create_samples(M1 = M^(2/3)+10, hfamily, zvalues)
+        ## since there would be around M^(1/3), on average
+        ## each time we need the squeezing test to accept M^(2/3) samples
+
+        ## Stage III: Squeezing and Rejection
+        sr_test_x <- sr_test(samples, hfamily, zvalues, f = f)
+        sample_count = sample_count + sr_test_x$count_accept
+        sample_bag = c(sample_bag, sr_test_x$x_accept)
+
+        ## Stage IV: Updation
+        if (is.na(sr_test_x$x_r) != TRUE){
+            hfamily <- update_hfamily(hfamily,x_r = sr_test_x$x_r, lb = lb, ub = ub, f = f)
+            zvalues <- update_z(hfamily,lb,ub)
+        }
+        
+    }
+
+    ## Final check for concavity
+    if(sum(round(diff(hfamily[,3]),digits=8) > epsilon) !=0){
+        stop("Density function is either dis-continuous, non-differentiable, or convex.",
+             .call = FALSE)
+    }  
+
+    ## Return the M sample in the sample bag
+    hist(sample_bag[1:M])
+    return(sample_bag[1:M])
+}
+@
+
+\subsection{Initialization functions: \texttt{initialize\_sample()}}
+
+<<compile-r-append2, size = "small", eval=FALSE>>=
+
+initialize_hfamily <- function(M, lb, ub, h, hprime, x_initial){
+  
+  ## Initialize  matrix for h family: the columns of matrix are
+  ## x, h(x), h'(x)
+  ## Filling in the initial values in matrix
+    hfamily <- rbind(c(x_initial[1],
+                       h(x_initial[1]),
+                       hprime(x = x_initial[1],
+                              lb = lb,
+                              ub = ub)),
+                     c(x_initial[2],
+                       h(x_initial[2]),
+                       hprime(x = x_initial[2],
+                              lb = lb,
+                              ub = ub)))
+    return(hfamily)
+}
+
+initialize_z <- function(M, lb, ub, hfamily){
+  z<-rep(NA,3)
+  ## Initializing a very small integer limiting to 0
+  epsilon = 1e-8
+  z[1] <- lb
+  z[3] <- ub
+  if(abs(z[1] - z[3]) < epsilon){
+    z[2] <- (hfamily[1, 1] + hfamily[2, 1])/2
+  } else {
+    z[2] <- ((hfamily[2, 2]-hfamily[1, 2]) -
+               (hfamily[2, 1]*hfamily[2, 3]-hfamily[1, 1]*hfamily[1, 3]))/
+      (hfamily[1, 3]-hfamily[2, 3])
+  }
+  if(is.infinite(z[2])){
+  z[2] = ( hfamily[1,1] + hfamily[2,1] )/2
+  }
+  return(z)
+}
+
+initialize_sample <- function(M, lb, ub, width = 0.5, mod_val = 0,
+                              h = compute_log,
+                              hprime = compute_deriv){
+
+    ## Initializing counter index
+    count = 0
+
+    ## When both the initial parameter values are initialized by the user
+    if(lb != -Inf && ub != Inf){
+        x_initial <- sort(runif(2, lb, ub))
+        hfamily <- initialize_hfamily(M, lb, ub, h, hprime, x_initial)
+        zvalues <- initialize_z(M, lb, ub, hfamily)
+    }
+
+    ## When only the upper initial value, x2 is defined by the user
+    if(lb == -Inf && ub != Inf){
+        ## If the mode of the density is higher than the upper bound
+        if(mod_val > ub){
+            mod_val <- ub - width
+        }
+        ## Defining the lower initial value
+        llb <- mod_val
+        ## Check if h'(x) exists for the newly defined lower bound
+        hprime_check <- hprime(x = llb, func = h, lb = lb, ub = ub)
+        while(-Inf < hprime_check && hprime_check <= 0 && count <= 100){
+            llb <- llb - width
+            hprime_check <- compute_deriv(x = llb, func = h, lb = lb, ub = ub)
+            count = count + 1
+        }
+        x_initial <- sort(c(llb, runif(1, llb, ub)))
+        hfamily <- initialize_hfamily(M, llb, ub, h, hprime,x_initial)
+        zvalues <- initialize_z(M, lb, ub, hfamily)
+    }
+
+    ## When only the lower initial value, x1 is defined by the user
+    if(lb != -Inf && ub == Inf){
+        if(mod_val < lb){
+            mod_val <- lb + width
+        }
+        ## Defining the upper initial value
+        uub <- mod_val
+        ## Check if h'(x) exists for the newly defined upper bound
+        hprime_check <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+        while(0 <= hprime_check && hprime_check < Inf && count <= 100){
+            uub <- uub + width
+            hprime_check <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+            count = count + 1
+        }
+        x_initial <- sort(c(runif(1, lb, uub),uub))
+        hfamily <- initialize_hfamily(M, lb, uub, h, hprime,x_initial)
+        zvalues <- initialize_z(M, lb, ub, hfamily)
+    }
+
+    ## When both the initial values are not defined by the user
+    if(lb == -Inf && ub == Inf){
+        llb <- mod_val - width
+        uub <- mod_val + width
+        ## Check if h'(x) exists for the newly defined bounds
+        hprime_check1 <- compute_deriv(x = llb, func = h, lb = lb, ub = ub)
+        hprime_check2 <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+        while(-Inf < hprime_check1 && hprime_check1 <= 0 && count <= 100){
+            llb <- llb - width
+            hprime_check1 <- compute_deriv(x = llb, func = h, lb = lb, ub = ub)
+            count = count + 1
+        }
+        while(0 <= hprime_check2 && hprime_check2 < Inf && count <= 100){
+            uub <- uub + width
+            hprime_check2 <- compute_deriv(x = uub, func = h, lb = lb, ub = ub)
+            count = count + 1
+        }
+        x_initial <- c(llb,uub)
+        hfamily <- initialize_hfamily(M, llb, uub, h, hprime,x_initial)
+        zvalues <- initialize_z(M, lb, ub, hfamily)
+
+        if(count >= 100) {
+            stop("mod_val is invalid, initial point cannot be found. Try another mod_val",
+                 .call = FALSE)
+        }
+    }
+    return(list("hfamily" = hfamily, "zvalues" = zvalues))
+}
+@
+
+\subsection{Sampling functions: \texttt{create\_sample()}}
+
+<<compile-r-append3, size = "small", eval=FALSE>>=
+calculate_scdf <- function(vals, hfamily, z) {
+  
+    zlen = length(z)
+    cdf = numeric(length(vals))
+    c = 0
+    
+    for(i in 1:(zlen-1)){
+        zl = z[i]
+        zu = z[i+1]
+        xp = hfamily[i,1]
+        hp = hfamily[i,2]
+        hprimep = hfamily[i,3]
+        ## calculate the cumulated density in each interval, parts of
+        ## the demonimator of s
+        ds = exp(hp)/hprimep * ( exp((zu - xp)*hprimep) - exp((zl - xp)*hprimep) )
+        ## get the logic vector, true if val belongs to the
+        ## interval
+        inside_idx = (zl < vals & vals <= zu)
+        ## get the logic vector, true if val is larger than z[i+1]
+        greater_idx = vals > zu
+        ## if inside interval, only cumulate till the example
+        ## point
+        cdf[inside_idx] = cdf[inside_idx] + exp(hp)/hprimep *
+        (exp((vals[inside_idx] - xp)*hprimep)
+	- exp((zl - xp)*hprimep))
+        ## if larger than the upper interval, cumulate the whole
+        ## interval
+        cdf[greater_idx] = cdf[greater_idx] + ds
+        ## total CDF
+        c = c + ds
+    }
+    l = list(scdf = cdf/c, c = c )
+    return(l)
+}
+
+create_samples <- function(M1, hfamily, zvalues, scdf = calculate_scdf){
+    zcdf <- calculate_scdf(vals = zvalues, hfamily, z = zvalues)
+    zq = zcdf$scdf
+    c = zcdf$c
+    unif_sample = runif(M1)
+    uidx = findInterval(unif_sample, zq)
+    intervals_count = length(zq) - 1
+    zlow = zvalues[-length(zvalues)]
+    res = rep(NA, length(unif_sample))
+    
+    for(ii in 1:intervals_count){
+        ui = unif_sample[uidx == ii]
+        if(length(ui) == 0){next}
+        
+        xp = hfamily[(ii),1]
+        hp = hfamily[(ii),2]
+        hprimep = hfamily[(ii),3]
+        zl = zlow[(ii)]
+        ## invert the CDF
+        tmp = log((ui-zq[ii]) * hprimep * c / exp(hp) + exp((zl - xp)*hprimep))/hprimep + xp
+        ## convert uniform sample to x according to sampled cdf
+        res[uidx == ii] = tmp
+    }  
+    return(res)
+}
+
+@
+
+\subsection{Squeezing and Rejection Test functions: \texttt{sr\_test()}}
+
+<<compile-r-append4, size = "small", eval=FALSE>>=
+
+u <- function(x_sample, hfamily,z) {
+  
+  res = rep(0, length(x_sample))
+  interval_idx = findInterval(x_sample, z)
+  
+  nintervals = length(z) -1
+  for(idx in 1:nintervals){
+    xi = x_sample[interval_idx == idx]
+    ux = hfamily[idx,2] + (xi - hfamily[idx,1]) * hfamily[idx,3]
+    res[interval_idx == idx] = ux
+  }
+  
+  return(res)
+}
+
+l <- function(x_sample, hfamily){
+    res = rep(0, length(x_sample))
+    interval_idx = findInterval(x_sample, hfamily[,1])
+    
+    nintervals = length(hfamily[,1]) - 1
+    for(idx in 1:nintervals){
+        xi = x_sample[interval_idx == idx]
+        xx  = ( (hfamily[idx+1,1] - xi)*hfamily[idx,2] + (xi -
+    hfamily[idx,1])*hfamily[idx+1,2] ) /
+    ( hfamily[idx+1,1] - hfamily[idx,1])
+        res[interval_idx == idx] = xx
+    }
+    
+    res[interval_idx == 0] = -Inf
+    res[interval_idx == length(hfamily[,1])]=-Inf
+    return(res)
+}
+
+sr_test <- function(x_sample, hfamily, zvalues, h = compute_log){
+  
+    w = runif(length(x_sample))
+    count_accept = 0
+    x_r = NA
+  
+    ## perform squeezing test and select the samples that passed the squeezing test
+    x_accept = x_sample[exp(l(x_sample,hfamily) - u(x_sample,hfamily,zvalues)) >= w]
+    x_reject_s = x_sample[exp(l(x_sample,hfamily) - u(x_sample,hfamily,zvalues)) < w]
+    count_accept = count_accept + length(x_accept)
+    
+    if(length(x_reject_s) != 0){
+        ## perform rejection test and select the first sample that did
+    	## not passed the squeezing test
+        x_r = x_reject_s[1]
+        
+        if(exp(h(x_reject_s[1]) - u(x_reject_s[1],
+			            hfamily,zvalues)) >= w[x_sample==x_r]){
+            count_accept = count_accept + 1
+            x_accept = c(x_accept,x_r)
+        }
+    }
+    list = list(x_accept = x_accept, x_r = x_r, count_accept = count_accept)
+    return(list)
+}
+@
+
+
+\subsection{Updation functions: \texttt{update\_hfamily()}, \texttt{update\_z()}}
+
+<<compile-r-append5, size = "small", eval=FALSE>>=
+update_hfamily <- function(hfamily, x_r, h = compute_log, hprime = compute_deriv){
+  
+    newline = cbind(x_r, h(x_r), hprime(x_r, lb = lb, ub = ub))
+    hfamily = rbind(hfamily, newline)
+    hfamily = hfamily[order(hfamily[ , 1]), ]
+    return(hfamily)
+}
+
+update_z <- function(hfamily, lb, ub){
+    nrow = nrow(hfamily)
+    xf0 = hfamily[-nrow, 1]
+    xf1 = hfamily[-1, 1]
+    hf0 = hfamily[-nrow, 2]
+    hf1 = hfamily[-1, 2]
+    dhf0 = hfamily[-nrow, 3]
+    dhf1 = hfamily[-1, 3]
+    
+    z = xf0 + (hf0 - hf1 + (xf1 - xf0)*dhf1) / (dhf1 - dhf0)
+    inf_idx = is.infinite(z) == TRUE
+    z[inf_idx] = ( xf1[inf_idx] + xf0[inf_idx] )/2
+    
+    z = c(lb, z, ub)
+    z = sort(z, decreasing = FALSE)
+    return(z)	
+}
+@
 
-\item [(b)] What choices did the authors have to make in designing
-their simulation study? What are the key aspects of the data
-generating mechanism that likely affect the statistical power of the test?
-Are there data-generating scenarios that the authors did not consider
-that would be useful to consider?
-
-\textbf{Ans.}
-
-The choices made in designing the simulation study include:
-\begin{itemize}
-\item For a mixture of two normal distributions, the standard
-deviations of the two normal distributions are assumed to be same.
-\item The authors decided the sample sizes to range between 50, 75,
-\ldots 1000.
-\item The choice of test statistic used in the analysis.
-\item The proportion in which the component normal distributions are
-used to create a mixture.
-\end{itemize}
-
-Some aspects of DGM that affect the statistical power of the test are:
-\begin{itemize}
-\item Number of samples generated.
-\item Value of mixing proportions used to create mixture of normal
-distribution for 2 and 3 component mixture of distribution.
-\item Sample sizes
-\item Distance measure defined on basis of samples used.
-\end{itemize}
-
-Data generating scenarios that authors did not consider include:
-\begin{itemize}
-\item A normal mixture with unequal variances of component
-distributions.
-\item Different measures for distance between the two
-components. 
-\end{itemize}
-
-\item [(c)] Interpret their tables on power (Tables 2 and 4) - do the
-results make sense in terms of how the power varies as a function of
-the data generating mechanism?
-
-\textbf{Ans.}
-
-Table 2 discusses the case for null hypothesis that a random sample
-has been drawn from a single normal distribution vs an alternative
-being that sample is drawn of mixture of two normal
-distributions). The empirical powers of the adjusted and unadjusted
-tests are evaluated at $\alpha = 0.01$ and 0.05. The power is seen to
-be very low for $n < 200$ when the two components are not well
-separated, thus a sample size of 100 or more is required to have
-reasonable power when the two components are well separated. There is
-no strong evidence that the power depends on the mixing proportion,
-although the power for $\pi = 0.5$ and $\pi = 0.7$ is somewhat higher
-than that for $\pi = 0.9$. The power of the unadjusted test is
-inflated, because the approximation of the nominal levels of 0.01 and
-0.05 to the actual levels of the unadjusted test is not accurate. As a
-consequence, the unadjusted test tends to reject the null hypothesis
-more often than does the adjusted test.
-
-Table 3 discusses the case for null hypothesis that a random sample
-has been drawn from a mixture of two normal distributions vs
-alternative being that sample is drawn of mixture of three normal
-distributions. The results show that the rate of convergence of
-adjusted test statistic toward the asymptotic distribution depends on
-the spacing between the components and the mixing
-proportion. Regardless of the mixing proportion, the distribution of
-2LR* (test statistic) converges rather well for $D = 1$ and 2. When $D
-= 3$, the approximation is not very accurate but is acceptable for
-most sample sizes.
-
-Table 4 gives the observed rejection rates of the null hypothesis at
-$\alpha = 0.01$ and 0.05 for the first set of mixing weights. The
-results indicate that the factors with most influence on power are the
-spacings $D_1$ and $D_2$. The adjusted test exhibits low power for
-sample sizes less than 200 when $D_1 \leq 4$ and $D_2 \leq 2$, or $D1
-\leq 2$ and $D \leq 4$.
-
-\item [(d)] Do their tables do a good job of presenting the simulation
-results and do you have any alternative suggestions for how to do this?
-
-\textbf{Ans.}
-
-In general, graphs are a better way of showing the results of a
-simulation exercise, however, given the number of dimensions of
-parameters the authors have been working on, a graphical
-representation would have been difficult in a static manner. Thus, I
-believe that the authors have done a decent job.
-
-\end{description}
-
-\section{Question 2}
-
-Using the Stack Overflow database
-(\url{http://www.stat.berkeley.edu/share/paciorek/stackoverflow-2016.db}),
-write SQL code that will determine which users have asked
-Spark-related questions (tags that have "apache-spark" as part of the
-tag – you'll need to use the SQL wildcard character, \%) but not
-Python-related questions. Those of you with more experience with SQL
-might do this in a single query, but it's perfectly fine to create one
-or more views and then use those views to get the result as a
-subsequent query. Report how many unique such users there. The Stack
-Overflow SQLite database is ~ 650 MB on disk, which should be
-manageable on most of your laptops, but if you run into problems, you
-can use an SCF machine or Savio.
-
-\textbf{Ans.} The following R-chunk uses \textit{RQLite} to run 
-SQL queries and find the number of users using Spark-related questions
-but not Python related questions. The total number of such users are:
-\textbf{4647}.
-
-% <<compile-r-Q2, size = "small", eval=TRUE>>=
-% ########################
-% ## Libraries required ##
-% ########################
-% library(RSQLite)
-
-% ################
-% ## SQL driver ##
-% ################
-% # Define driver
-% driver <- dbDriver("SQLite")
-% # Define directory
-% dir <- 'QUES2/DATA/' 
-% dbFilename <- 'stackoverflow-2016.db'
-% # Connect to driver
-% db <- dbConnect(driver, dbname = file.path(dir, dbFilename))
-
-% ###############
-% ## SQL Query ##
-% ###############
-% dbGetQuery(db,
-%     "SELECT COUNT(DISTINCT Q.ownerid) FROM
-% questions Q JOIN questions_tags T ON Q.questionid = T.questionid
-% WHERE T.tag LIKE '%apache-spark%' AND
-% Q.ownerid NOT IN 
-% (SELECT DISTINCT A.ownerid FROM
-% (SELECT Q.ownerid, T.tag FROM
-% questions Q JOIN questions_tags T ON Q.questionid = T.questionid
-% WHERE T.tag LIKE '%apache-spark%') A JOIN 
-% (SELECT Q.ownerid, T.tag FROM questions Q
-% JOIN questions_tags T ON Q.questionid = T.questionid
-% WHERE T.tag LIKE '%python%') B ON A.ownerid = B.ownerid)")
-% @
-
-
-% \section{Question 3}
-
-% With the full Wikipedia traffic data for October-December 2008
-% (available on Savio in
-% \url{/global/scratch/paciorek/wikistats\_full/dated}), figure out a question
-% to investigate with the data and use Spark to process the data to
-% answer the question. You should use Spark to process the dataset, but
-% you can then use R or Python as you wish to do the subsequent analysis
-% (which might be simply a graphical presentation or might involve
-% fitting a statistical model). For example, given the time period
-% available, you could consider a U.S. politics-related question, a
-% question related to holidays since many holidays occur in the fall, a
-% question related to seasonality since the data cover the period where
-% the northern hemisphere enters winter and the southern hemisphere
-% enters summer, or a question related to daily/weekly patterns. Given
-% the information on language, you may be able to get at some sort of
-% pattern related to culture or religion. You can also extend the Obama
-% analysis, but it should be more than a trivial extension.
-
-% \textbf{Ans.}
-
-% The following pyspark and bash code chunks are run on SAVIO to extract the
-% wikipedia hits for the webpages used in the analysis. The webpages for
-% which the hits have been extracted are:
-% \begin{itemize}
-% \item \textbf{Freddie Mac} (\url{https://en.wikipedia.org/wiki/Freddie_Mac})
-% \item \textbf{Fannie Mae} (\url{https://en.wikipedia.org/wiki/Fannie_Mae})
-% \item \textbf{Federal Reserve} (\url{https://en.wikipedia.org/wiki/Federal_Reserve})
-% \item \textbf{Mortgage-backed securities} (\url{https://en.wikipedia.org/wiki/Mortgage-backed_security})
-% \item \textbf{Financial crisis of 2007-08} (\url{https://en.wikipedia.org/wiki/Financial_crisis_of_2007%E2%80%932008})
-% \end{itemize}
-
-% The following pyspark code chunk below is run in interactive mode to access the hits
-% statistics for the above mentioned webpages. To run the pyspark code
-% the interactive mode is first started on.
-
-% The bash commands used to turn on the interactive mode for pyspark
-% are:
-
-
-% <<compile-bash-Q3, engine='bash', eval = FALSE>>=
-% # Login to hpc cluster on SAVIO using:
-% ssh -Y sargam_jain@hpc.brc.berkeley.edu
-% tmux new -s spark
-% srun -A ic_stat243 -p savio2 --nodes=4 -t 3:00:00 --pty bash
-% module load java spark/2.1.0 python/3.5
-% source /global/home/groups/allhands/bin/spark_helper.sh
-
-% # Login to viz cluster on SAVIO to open otterbrowser using:
-% ssh -Y sargam_jain@viz.brc.berkeley.edu
-% vncserver
-
-% # Back to hpc.cluster to open PYSPARK:
-% echo $SPARK_URL
-% pyspark --master $SPARK_URL --conf
-% e"spark.executorEnv.PYTHONHASHSEED=321" --executor-memory 60G
-% @
-
-
-% Following is the pyspark script used to extract the data for the above
-% mentioned webpages. The phrase \texttt{site\_of\_interest} is
-% replaced by the following phrases:
-% \begin{itemize}
-% \item \texttt{Financial\_crisis\_of\_2007-2008}
-% \item \texttt{Freddie\_Mac}
-% \item \texttt{Fannie\_Mae}
-% \item \texttt{Federal\_reserve}
-% \item \texttt{Mortgage-backed\_securities}
-% \end{itemize}
-
-
-% <<compile-python-Q3, engine='python', size = "small", eval=FALSE>>=
-% ###################
-% ## Packages used ##
-% ###################
-% import re
-% from operator import add
-
-% ##############################
-% # Read wikipedia parent data #
-% ##############################
-% dir = '/global/scratch/paciorek/wikistats_full'
-% lines = sc.textFile(dir + '/' + 'dated') 
-
-% ###############################
-% # Filtering sites of interest #
-% ###############################
-% def find(line, regex = "site_of_interest", language = None):
-%     vals = line.split(' ')
-%     if len(vals) < 6:
-%         return(False)
-%     tmp = re.search(regex, vals[3])
-%     if tmp is None or (language != None and vals[2] != language):
-%         return(False)
-%     else:
-%         return(True)
-
-% object_of_interest = lines.filter(find)  # use this for demo in section
-
-% ###################################################################
-% ## Map-reduce step to sum hits across date-time-language triplet ##
-% ###################################################################   
-% def stratify(line):
-%     # create key-value pairs where:
-%     #   key = date-time-language
-%     #   value = number of website hits
-%     vals = line.split(' ')
-%     return(vals[0] + '-' + vals[1] + '-' + vals[2], int(vals[4]))
-
-% counts = object_of_interest.map(stratify).reduceByKey(add)
-
-% ################################
-% ## Map step to prepare output ##
-% ################################
-% def transform(vals):
-%     # split key info back into separate fields
-%     key = vals[0].split('-')
-%     return(",".join((key[0], key[1], key[2], str(vals[1]))))
-
-% # Output to file is done using one partition because one file per partition is written out
-% outputDir = dir + '/' + 'dir-of-interest'
-% counts.map(transform).repartition(1).saveAsTextFile(outputDir)
-% @
-
-% The analysis on the Wikistats data requires following packages:
-
-
-% <<compile-r-Q3a, size = "small", eval=TRUE, message=FALSE>>=
-% ##################
-% # Libraries used #
-% ##################
-% library(data.table)
-% library(readr)
-% library(xts)
-% library(dynlm)
-% @
-
-
-% The reduced data for each of the webpages is of the format as
-% demonstrated in the r-code chunk below:
-
-% <<compile-r-Q3b, size = "small", eval=TRUE, message=FALSE>>=
-% #####################
-% # Directory address #
-% #####################
-% parent_dir = "QUES3/data/"
-% sub_dir = list.files(parent_dir)
-
-% ################################
-% # Function to read parent data #
-% ################################
-% read_data <- function(repo){
-%     cat("Reading data for:", repo, "...\n")
-%     ans = read_delim(file = paste0(parent_dir, repo, "/", "part-00000"),
-%        		     delim = ",",
-% 		     col_names = FALSE)
-%     ans <- data.frame(ans)
-%     colnames(ans) <- c("date", "time", "lang", "hits")
-%     ans$date <- as.Date(as.character(ans$date), "%Y%m%d")
-%     ans$new_lang <- substr(ans$lang, 1, 2)
-%     ans$date_time <- paste(ans$date, ans$time)
-%     ans$time <- as.POSIXct(ans$time, format = "%H%M%S")
-%     ans$date_time <- as.POSIXct(ans$date_time, format = "%Y-%m-%d %H%M%OS")
-%     ans <- ans[order(ans$date), ]
-%     return(ans)
-% }
-
-% fannie_mae = read_data(repo = sub_dir[2])
-% fed_reserve = read_data(repo = sub_dir[3])
-% financial_crisis = read_data(repo = sub_dir[4])
-% freddie_mac = read_data(repo = sub_dir[5])
-% mortgage = read_data(repo = sub_dir[6])
-
-% head(financial_crisis)
-% @
-
-% Now, the Wikipedia webpage on \textit{Financial Crisis 2007-2008} was
-% created immediately prior to our sample period (October-December,
-% 2008) on September 17, 2008. The number of hits on the web page
-% increased overtime, especially during the months of October and early
-% November. The following r-chunk shows the number of hits at daily
-% frequency and marks the major events that took place during our sample
-% period:
-
-% <<compile-r-Q3supp, size = "small", eval=TRUE, message=FALSE, fig.width=8, fig.height=5>>=
-% ########################################
-% ## Function to sum hits over each day ##
-% ########################################
-% aggregate_data <- function(mdata, lang = "all"){
-%     unique_dates <- sort(unique(mdata$date))
-%     per_date <- do.call(rbind, lapply(unique_dates, function(x){
-%         tmp <- mdata[mdata$date == x, ]
-%         ans <- data.frame("date" = x,
-%                           "hits" = sum(tmp$hits),
-%                           "lang" = lang)
-%         return(ans)
-%     }))
-%     return(per_date)
-% }
-
-% agg_fannie_mae = aggregate_data(mdata = fannie_mae)
-% agg_fed_reserve = aggregate_data(mdata = fed_reserve)
-% agg_financial_crisis = aggregate_data(mdata = financial_crisis)
-% agg_freddie_mac = aggregate_data(mdata = freddie_mac)
-% agg_mortgage = aggregate_data(mdata = mortgage)
-
-% plot(agg_financial_crisis$date, agg_financial_crisis$hits,
-% lty = 1, lwd = 2.5, col = "red", las = 1, type = "l",
-% xlab = "", ylab = "Number of hits",
-% main = "Hits on 'Financial Crisis 2007-08'")
-% points(agg_financial_crisis$date, agg_financial_crisis$hits,
-% col = "black", pch = 19)
-% abline(h = pretty(agg_financial_crisis$hits), lty = 3, lwd = 1, col = "darkgray")
-% abline(v = pretty(agg_financial_crisis$date), lty = 3, lwd = 1, col = "darkgray")
-% abline(v = as.Date("2008-10-03"), lwd = 2.5, lty = 1, col = "orange")
-% mtext("TARP revised", side = 3, line = 0.5, at = as.Date("2008-10-03"))
-% @
-
-% The major action taken by the state during the start of the sample period in the analysis
-% was when Congress passed a revised version of TARP and President
-% Bush signed it on October 3, 2008. 
-
-% The following are the \textbf{questions} explored using the wikistats
-% data:
-% \begin{itemize}
-% \item At the time of the financial crisis, the page, Financial crisis
-% of 2007-08 was a recently created page on Wikipedia on Sept 17th,
-% 2008. The time-series model in the analysis evaluates whether people
-% consistently checked the page for more information on new developments
-% around the time of the crisis, i.e. was Wikipedia updated with
-% real-time developments about the crisis attracting users to come back
-% and checkout the recent developments.
-
-% \item Did people have a bottom-up or top-down approach while searching
-% about what was happening at the time of the crisis?  i.e. were they
-% first understanding the FIs/instruments involved in the crisis and
-% then looking for the recent updates or were they first updating
-% themselves about the recent actions taken to curb the crisis and then
-% digging deeper to understand the FIs/instruments involved in the
-% crisis.
-% \end{itemize}
-
-% \textbf{Before we answer these questions, we try to understand the
-% data:}
-
-% First, we \textbf{analyze the correlation of the hits on the webpages of
-% interest}. The following R-code chunk evaluates the correlation of hits
-% on the webpage, \textit{Financial crisis of 2007-08} with hits on the
-% webpages: \textit{Freddie Mac}, \textit{Freddie Mae}, \textit{Federal
-% Reserve}, and \textit{Mortgage-backed securities}.
-
-% The correlation numbers are mostly greater than 0.5 for all the
-% pairs.
-
-% <<compile-r-Q3c, size = "small", eval=TRUE, message=FALSE>>=
-% ## Correlation between financial crisis and FIs/financial instrument webpages
-% cor(agg_financial_crisis$hits, agg_freddie_mac$hits)
-
-% cor(agg_financial_crisis$hits, agg_fannie_mae$hits)
-
-% cor(agg_financial_crisis$hits, agg_mortgage$hits)
-
-% cor(agg_financial_crisis$hits, agg_fed_reserve$hits)
-% @
-
-% Second, we \textbf{look at the underlying distribution of the hits on webpages
-% of interest} during the three months sample of crisis period. A Q–Q
-% plot is used to compare the underlying distributions of the hits
-% across web pages in analysis. We use Q-Q plots to compare the
-% underlying distribution of sample of hits as it is a more powerful
-% approach to do this than comparing histograms. The Q-Q plots that the
-% sample of hits on wikipedia for web pages of interest have similar
-% underlying distribution.
-
-% <<compile-r-Q3d, size = "small", eval=TRUE, message=FALSE, fig.width=6, fig.height=6>>=
-% ################################
-% ## Function to make Q-Q plots ##
-% ################################
-% make_qqplots <- function(mdata1, mdata2, xlabel, ylabel){
-%     a_1 <- log(mdata1$hits)
-%     a_2 <- log(mdata2$hits)
-%     qqplot(x = a_1, y = a_2, 
-%            xlab = xlabel, ylab = ylabel, cex.lab = 1,
-%            pch = 19, col = "darkblue", las = 1)
-%     abline(h = pretty(a_2), lwd = 1, lty = 3, col = "darkgray")
-%     abline(v = pretty(a_1), lwd = 1, lty = 3, col = "darkgray")
-% }
-% par(mfrow = c(2,2))
-% par(mar = c(4, 5, 3, 1))
-% make_qqplots(mdata1 = agg_mortgage,
-%              mdata2 = agg_financial_crisis,
-%              xlabel = "Hits on Mortgage-backed securities",
-%              ylabel = "Hits on Financial Crisis")
-% make_qqplots(mdata1 = agg_freddie_mac,
-%              mdata2 = agg_financial_crisis,
-%              xlabel = "Hits on Freddie Mac",
-%              ylabel = "Hits on Financial Crisis")
-% make_qqplots(mdata1 = agg_fannie_mae,
-%              mdata2 = agg_financial_crisis,
-%              xlabel = "Hits on Fannie Mae",
-%              ylabel = "Hits on Financial Crisis")
-% make_qqplots(mdata1 = agg_fed_reserve,
-%              mdata2 = agg_financial_crisis,
-%              xlabel = "Hits on Fed Reserve",
-%              ylabel = "Hits on Financial Crisis")
-
-% @
-
-% \textbf{We now, start exploring the above mentioned questions:}
-
-% \textbf{First question}: Did Wikipedia users consistently check
-% the page for more information on new developments during the sample
-% period of three months during the crisis?
-
-% The regression model in the following R-chunk analyzes how likely was
-% it that a wikipedia user would return back to the page to checkout
-% more information about the existing crisis. Thus, we analyze the
-% dependence over lagged values of hits on the page. We explore the
-% relationship of the hits on financial crsis with the lagged values
-% over 1-day, 2-days, 7-days, and 8-days. The time series model in the
-% R-code chunk below shows a strong relationship of $(t-7)$ days lagged
-% hits on the page with the hits on day $t$, indicating that wikipedia
-% users went back to the Financial Crisis page iteratively with a lag of
-% about a week to check for more information.
-
-% <<compile-r-Q3e, size = "small", eval=TRUE, message=FALSE>>=
-% ####################################################################
-% ## Function to sum hits over each hour across different languages ##
-% ####################################################################
-% aggregate_data_hr <- function(mdata){
-%     unique_dates <- sort(unique(mdata$date))
-%     per_date <- do.call(rbind, lapply(unique_dates, function(x){
-%         tmp <- mdata[mdata$date == x, ]
-%         unique_time <- unique(substr(tmp$time, 12, 13))
-%         per_hour <- do.call(rbind, lapply(unique_time, function(y){
-%             tmp1 <- tmp[substr(tmp$time, 12, 13) == y, ]
-%             ans <- data.frame("date" = tmp1$date[1],
-%                               "date_time" = tmp1$date_time[1],
-%                               "hits" = sum(tmp1$hits),
-%                               "hour" = as.numeric(y))
-%             return(ans)
-%         }))
-%         per_hour <- per_hour[order(per_hour$hour), ]
-%         return(per_hour)
-%     }))
-%     return(per_date)
-% }
-
-% hour_fannie_mae = aggregate_data_hr(mdata = fannie_mae)
-% hour_fed_reserve = aggregate_data_hr(mdata = fed_reserve)
-% hour_financial_crisis = aggregate_data_hr(mdata = financial_crisis)
-% hour_freddie_mac = aggregate_data_hr(mdata = freddie_mac)
-% hour_mortgage = aggregate_data_hr(mdata = mortgage)
-
-% ########################################################
-% ## Logarithmic values used in time series regression  ##
-% ########################################################
-%                                         # Hourly hits
-% fmae <- xts(log10(hour_fannie_mae$hits), order.by = hour_fannie_mae$date_time)
-% fedres <- xts(log10(hour_fed_reserve$hits), order.by = hour_fed_reserve$date_time)
-% fcrisis <- xts(log10(hour_financial_crisis$hits), order.by = hour_financial_crisis$date_time)
-% fmac <- xts(log10(hour_freddie_mac$hits), order.by = hour_freddie_mac$date_time)
-% mort <- xts(log10(hour_mortgage$hits), order.by = hour_mortgage$date_time)
-
-% #########################
-% ## Regression analysis ##
-% #########################
-% dfm0 <- dynlm(fcrisis ~ L(fcrisis, c(seq(25, 49, 24), seq(169, 217, 24))))
-% summary(dfm0)
-% @
-
-% \textbf{Second question}: What was the direction of Wikipedia search
-% that the users adopted? Did they try to understand the crisis by
-% learning about the financial institutions and instruments involved
-% followed by the new developments coming up with every passing day? Or
-% was it the other way round.
-
-% The R-code chunk below first evaluates the relationship of hits on
-% Financial crisis web page with the lagged hits on web pages of
-% financial institutions and financial instruments. The results for the
-% model, \texttt{dfm1} shows that with an exception of the lagged hits
-% on web page for Federal reserve, the hits on Financial Crisis have a
-% positive and a significant relationship with lagged hits on all other
-% web pages.
-
-% Second, the model \texttt{dfm2} evaluates the other-way round search
-% approach of the Wikipedia users. Thus we evaluate the relationship of
-% hits on web pages of financial instruments and institutions with the
-% lagged hits on the Financial Crisis web page. The model, \texttt{dfm2}
-% shows insignificant relationship between hits on the page of
-% mortgage-backed securities and lagged hits on the Financial Crisis
-% webpage. Thus, the two models explain the search approach of Wikipedia
-% users: the Wikipedia users first, tried to understand the underlying
-% financial instruments and institutions before digging deeper into new
-% developments taking place during the crisis period on the Financial
-% Crisis page listing these developments.    
-
-
-% <<compile-r-Q3f, size = "small", eval=TRUE, message=FALSE>>=
-% ####################
-% ## One-way search ##
-% ####################
-% dfm1 <- dynlm(fcrisis ~ L(fmae, 3) + L(fedres, 2) + L(fmac, 1) + L(mort, 1))
-% summary(dfm1)
-
-% ##########################
-% ## The other-way search ##
-% ##########################
-% dfm2 <- dynlm(mort ~ L(fmac, 1) + L(fmae, 2) + L(fcrisis, c(2:4)))
-% summary(dfm2)
-% @
-
-% \section{Question 4}
-
-% This question asks you to complete the exercise begun in section on
-% October 16. Consider the full Wikipedia traffic data as in problem 3,
-% but use the data in \url{/global/scratch/paciorek/wikistats\_full/dated\_for\_R}.
-% It's the same data as in problem 3, but the partitions are half as big
-% so that one can fit 24 partitions in memory on a single Savio node.
-
-% \begin{description}
-
-% \item[(a)] Using either \textit{foreach} or \textit{parSapply} (or
-% \textit{parLapply}) on a single Savio node in the savio2 partition
-% (i.e., use "-p savio2" when submitting your job), write code that, in
-% parallel, reads in the space-delimited files and filters to only the
-% rows that refer to pages where "Barack\_Obama" appears.  Collect all
-% the results across the 960 files into a single data frame. (Note that
-% the R packages you'll need should be available in R if you use "module
-% load r r-packages", so you should not have to install them.) You can
-% do this either in an interactive session using srun or a batch job
-% using SBATCH. And if you use srun, you can run R itself either
-% interactively or as a background job. If it's taking a while and you
-% want to run the code on, say, a quarter of the files and then assume
-% the time scales accordingly, that's fine.
-
-% Hints:
-% \begin{enumerate}
-% \item \texttt{readr::read\_delim()} should be quite fast if employed
-% effectively
-% \item there are lines with fewer than 6 fields, but
-% \texttt{read\_delim()} should still work and simply issue a warning
-% \item there are lines that have quotes that should be treated as part
-% of the text of the fields and not as separators. Also, as usual, you
-% should test your code on a small subset interactively to make sure it
-% works before unleashing it on the full dataset.
-% \end{enumerate}
-% Alternatively, if you want to explore parallelizing bash shell code,
-% you should be able to do this problem without using R at all.
-
-% \textbf{Ans.}
-
-% The following R-script is used to filter out webpages where
-% \texttt{Barack\_Obama} appears. The parallel computing is done in $R$
-% using the \textit{parLapply} function in R. The following R script is
-% run as a BATCH job in SAVIO using the batch script provided below the
-% R-chunk:
-
-% \textbf{In total there are 430,160 observations (webpages) with the
-% phrase \texttt{Barack\_Obama}.  }
-% <<compile-r-Q4a, size = "small", eval=FALSE, message=FALSE>>=
-% ###################
-% # Input variables #
-% ###################
-% data_url <- "/global/scratch/paciorek/wikistats_full/dated_for_R/"
-% all_files <- list.files(data_url)
-
-% ##################
-% # Libraries used #
-% ##################
-% library(parallel)
-% library(data.table)
-% library(doParallel)
-% num_cores <- detectCores() - 4
-
-% cl <- makeCluster(num_cores)
-% clusterExport(cl, c('data_url', 'all_files'))
-% clusterEvalQ(cl, library(readr))	
-
-% extract_records_with_BO <- function(x){
-%     cat("Working on file", x, "...\n")
-%     ans = read_delim(file = paste0(data_url, x),
-%        		     delim = " ",
-% 		     col_names = FALSE)
-%     ans <- data.frame(ans)
-%     colnames(ans) <- c("date", "time", "lang", "web_page", "no_of_hits", "page_size")
-%     tmp = ans[grep("Barack_Obama", ans$web_page), ]
-%     return(tmp)
-% }
-% system.time(records_BO <- parLapply(cl, all_files, extract_records_with_BO))
-% stopCluster(cl)
-% @
-
-% The bash script used to run the BATCH job on SAVIO is as follows:
-
-% <<compile-bash-Q4a, engine='bash', eval = FALSE>>=
-% # Login to hpc cluster on SAVIO using:
-% ssh -Y sargam_jain@hpc.brc.berkeley.edu
-% #!/bin/bash
-% # Job name:
-% #SBATCH --job-name=ps6_ques4_sj
-% #
-% # Account:
-% #SBATCH --account=ic_stat243
-% #
-% # Partition:
-% #SBATCH --partition=savio2
-% #
-% # Number of tasks needed for use case:
-% #SBATCH --nodes=1
-% #
-% # Processors per task:
-% #SBATCH --cpus-per-task=1
-% #
-% # Wall clock limit (2 hours here):
-% #SBATCH --time=2:00:00
-% #
-% ## Command(s) to run:
-% module load r r-packages
-% R CMD BATCH ps6_ques4.R ps6_ques4.Rout
-% @
-
-
-% \item [(b)] When I run the Spark code provided with Unit 7, it takes ~15
-% minutes using 96 cores to create the filtered dataset that just has the Obama-related webpage traffic
-% using Spark. Assuming that you can achieve perfect scalability (i.e., that if you ran your code
-% in part (a) on 4 times as many cores, it would go 4 times as fast), compare the effectiveness of
-% using parallelized R versus using PySpark in terms of how long it
-% takes to do the filtering. (Note that Unit 8 shows how one could
-% parallelize R across multiple nodes, but I won’t ask you to actually
-% do that here.)
-
-% \textbf{Ans.}
-
-% It takes 15 minutes using 96 cores in to create filtered data set that
-% has only Obama-related webpage traffic using Spark.
-
-% In R, I used 20 cores and that took approximately, 45 minutes in completing the
-% task. Assumming perfect scalability, 96 cores on R parallel computing
-% would have taken 14.01 minutes. Thus, the performance of PySpark and
-% parallel computing (over a single node) remain comparable at 15
-% minutes and 14.1 minutes, respectiveley. Moreover, this comparison
-% between the two is dependent on load on the server at the time of
-% their respective processings. 
-% \end{description}
+
 
 \end{document}
 
