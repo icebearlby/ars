@@ -19,13 +19,15 @@ ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
     if(class(f) != "function"){
         stop("Please provide f as a function", call. = FALSE)
     }
-    #Check if lb and ub are both numeric values
+
+    ## Check if lb and ub are both numeric values
     if(class(lb)!="numeric"){
     stop('please provide a numeric value for lb', call. = FALSE)
     }
     if(class(ub)!="numeric"){
     stop('please provide a numeric value for ub', call. = FALSE)
     }
+
     ## Check if user provide lb<ub
     if(lb >= ub){
         stop("Please provide lb and ub such that lb < ub", call. = FALSE)
@@ -57,7 +59,20 @@ ars <- function(M, lb = -Inf, ub = Inf, f, width = 0.5, mod_val = 0){
         stop("Density function is either dis-continuous, non-differentiable, or convex.",
     .call = FALSE)
     }
-    
+
+    ## Condition for differentiability
+    mode <- round(optimize(f, interval = c(lb, ub))$minimum, 2)
+    if(sum(round(compute_deriv(mode,
+                               lb = lb,
+                               ub = ub),
+                 digits = 4) != round(compute_deriv(x = (mode - 1e-8),
+                                                    lb = lb,
+                                                    ub = ub),
+                                      digits=4)) != 0){
+        stop("Log density function is not differentiable over the domain.",
+             .call = FALSE)
+    }
+
     ## Condition for differentiability
     if(sum(round(compute_deriv(x = check_vector,
                                lb = lb,
