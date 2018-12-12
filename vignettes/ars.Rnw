@@ -213,7 +213,7 @@ common log-concave distributions. The black bold line in the graphs
 marks the true density function and the blue line marks the density of
 observations sampled using adaptive rejection technique. 
 
-\includegraphics[scale = 0.75]{figures/common_density_plots}
+\includegraphics[scale = 0.5]{figures/common_density_plots}
 
 
 \section{Contribution}
