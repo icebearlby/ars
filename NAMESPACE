@@ -15,4 +15,4 @@ export(dnor, dgam, duni, dBeta, dlogit, d_t, dF, dExp, dlnor)
 export(dnon_concave, dnon_diff, dnon_conti)
 
 
-import(roxygen2, testthat, assertthat, knitr, truncdist)
+import(roxygen2, testthat, assertthat, knitr, truncdist, devtools)
